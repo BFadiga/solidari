@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "SolidarizeApp"
 include(":app")
+include(":backend")

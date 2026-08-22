@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# backend (Spring Boot)
+backend/build/
+backend/data/*.mv.db
+backend/data/*.trace.db
