@@ -1,0 +1,82 @@
+<section class="admin">
+  <h1>Administração de Parceiros</h1>
+
+  <p *ngIf="mensagem" class="mensagem" [class.mensagem-erro]="erro">
+    {{ mensagem }}
+  </p>
+
+  <div class="login" *ngIf="!autenticado">
+    <h2>Login de administrador</h2>
+    <form (ngSubmit)="entrar()" #loginForm="ngForm">
+      <label>
+        E-mail
+        <input type="email" name="email" [(ngModel)]="email" required>
+      </label>
+      <label>
+        Senha
+        <input type="password" name="senha" [(ngModel)]="senha" required>
+      </label>
+      <button type="submit" [disabled]="loginForm.invalid">Entrar</button>
+    </form>
+  </div>
+
+  <div class="painel" *ngIf="autenticado">
+    <div class="cabecalho-painel">
+      <span>Sessão de administrador ativa</span>
+      <button type="button" (click)="sair()">Sair</button>
+    </div>
+
+    <h2>Novo parceiro</h2>
+    <form (ngSubmit)="criarParceiro()" #parceiroForm="ngForm" class="form-parceiro">
+      <label>
+        Nome
+        <input type="text" name="nome" [(ngModel)]="novoParceiro.nome" required>
+      </label>
+      <label>
+        Categoria
+        <input type="text" name="categoria" [(ngModel)]="novoParceiro.categoria" required>
+      </label>
+      <label>
+        Descrição
+        <input type="text" name="descricao" [(ngModel)]="novoParceiro.descricao" required>
+      </label>
+      <label>
+        Badge
+        <input type="text" name="badge" [(ngModel)]="novoParceiro.badge" required>
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" name="destaque" [(ngModel)]="novoParceiro.destaque">
+        Destaque
+      </label>
+      <button type="submit" [disabled]="parceiroForm.invalid">Adicionar</button>
+    </form>
+  </div>
+
+  <h2>Parceiros cadastrados</h2>
+  <p *ngIf="carregando">Carregando...</p>
+
+  <table *ngIf="!carregando && parceiros.length > 0">
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>Categoria</th>
+        <th>Badge</th>
+        <th>Destaque</th>
+        <th *ngIf="autenticado"></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let parceiro of parceiros">
+        <td>{{ parceiro.nome }}</td>
+        <td>{{ parceiro.categoria }}</td>
+        <td>{{ parceiro.badge }}</td>
+        <td>{{ parceiro.destaque ? 'Sim' : 'Não' }}</td>
+        <td *ngIf="autenticado">
+          <button type="button" (click)="removerParceiro(parceiro.id)">Remover</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p *ngIf="!carregando && parceiros.length === 0">Nenhum parceiro cadastrado.</p>
+</section>
