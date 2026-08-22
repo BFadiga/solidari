@@ -1,0 +1,100 @@
+package br.com.fiap.solidari.backend.controller;
+
+import java.util.List;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import br.com.fiap.solidari.backend.dto.ParceiroRequest;
+import br.com.fiap.solidari.backend.dto.ParceiroResponse;
+import br.com.fiap.solidari.backend.exception.ErroResponse;
+import br.com.fiap.solidari.backend.service.ParceiroService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+
+@RestController
+@RequestMapping("/api/parceiros")
+@Tag(name = "Parceiros", description = "Parceiros e vantagens de cashback do Solidari")
+public class ParceiroController {
+
+    private final ParceiroService parceiroService;
+
+    public ParceiroController(ParceiroService parceiroService) {
+        this.parceiroService = parceiroService;
+    }
+
+    @GetMapping
+    @Operation(summary = "Lista os parceiros, opcionalmente filtrando por categoria")
+    public List<ParceiroResponse> listar(@RequestParam(required = false) String categoria) {
+        return parceiroService.listar(categoria).stream().map(ParceiroResponse::de).toList();
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Busca um parceiro pelo id")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Parceiro encontrado"),
+            @ApiResponse(responseCode = "404", description = "Parceiro não encontrado",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class)))
+    })
+    public ParceiroResponse buscar(@PathVariable Long id) {
+        return ParceiroResponse.de(parceiroService.buscarPorId(id));
+    }
+
+    @PostMapping
+    @Operation(summary = "Cria um novo parceiro (somente ADMIN)")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Parceiro criado com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário autenticado não é ADMIN")
+    })
+    public ResponseEntity<ParceiroResponse> criar(@Valid @RequestBody ParceiroRequest request) {
+        ParceiroResponse response = ParceiroResponse.de(parceiroService.criar(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Atualiza um parceiro existente (somente ADMIN)")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Parceiro atualizado com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Dados inválidos",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Usuário autenticado não é ADMIN"),
+            @ApiResponse(responseCode = "404", description = "Parceiro não encontrado",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class)))
+    })
+    public ParceiroResponse atualizar(@PathVariable Long id, @Valid @RequestBody ParceiroRequest request) {
+        return ParceiroResponse.de(parceiroService.atualizar(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Remove um parceiro (somente ADMIN)")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Parceiro removido com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Usuário autenticado não é ADMIN"),
+            @ApiResponse(responseCode = "404", description = "Parceiro não encontrado",
+                    content = @Content(schema = @Schema(implementation = ErroResponse.class)))
+    })
+    public ResponseEntity<Void> remover(@PathVariable Long id) {
+        parceiroService.remover(id);
+        return ResponseEntity.noContent().build();
+    }
+}
