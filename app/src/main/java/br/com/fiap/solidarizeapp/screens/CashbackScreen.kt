@@ -24,8 +24,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
+import br.com.fiap.solidarizeapp.navigation.SolidariBottomBar
 import br.com.fiap.solidarizeapp.ui.theme.*
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 
 // ---------------------------------------------------------------------------
 // Modelos de dados — futuramente virão do backend
@@ -95,6 +99,7 @@ val categoriasExemplo = listOf("Comunidade", "Meio Ambiente", "Educação", "Sa�
 
 @Composable
 fun CashbackScreen(
+    navController: NavHostController,
     usuario: Usuario = usuarioExemplo,
     impactos: List<ImpactoItem> = impactosExemplo,
     parceiros: List<Parceiro> = parceirosExemplo,
@@ -102,32 +107,50 @@ fun CashbackScreen(
     arvoresPlantadas: Int = 12,
     refeicoesServidas: Int = 40
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(BackgroundStart, BackgroundEnd)
+    val snackbarHostState = remember { SnackbarHostState() }
+    val escopo = rememberCoroutineScope()
+
+    Scaffold(
+        containerColor = BackgroundStart,
+        bottomBar = { SolidariBottomBar(navController) },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(BackgroundStart, BackgroundEnd)
+                    )
                 )
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(16.dp))
+            TopBar(nomeUsuario = usuario.nome, avatarUrl = usuario.avatarUrl)
+            Spacer(modifier = Modifier.height(16.dp))
+            SaldoCard(
+                saldo = usuario.saldo,
+                onDoarClick = {
+                    escopo.launch { snackbarHostState.showSnackbar("Selecione uma causa na Home para doar seu crédito.") }
+                },
+                onHistoricoClick = {
+                    escopo.launch { snackbarHostState.showSnackbar("Histórico completo chega na próxima fase.") }
+                }
             )
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-    ) {
-        Spacer(modifier = Modifier.height(16.dp))
-        TopBar(nomeUsuario = usuario.nome, avatarUrl = usuario.avatarUrl)
-        Spacer(modifier = Modifier.height(16.dp))
-        SaldoCard(saldo = usuario.saldo)
-        Spacer(modifier = Modifier.height(24.dp))
-        ImpactoSection(
-            arvoresPlantadas = arvoresPlantadas,
-            refeicoesServidas = refeicoesServidas,
-            impactos = impactos
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        ParceirosSection(parceiros = parceiros)
-        Spacer(modifier = Modifier.height(16.dp))
-        CategoriasRow(categorias = categorias)
-        Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+            ImpactoSection(
+                arvoresPlantadas = arvoresPlantadas,
+                refeicoesServidas = refeicoesServidas,
+                impactos = impactos
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            ParceirosSection(parceiros = parceiros)
+            Spacer(modifier = Modifier.height(16.dp))
+            CategoriasRow(categorias = categorias)
+            Spacer(modifier = Modifier.height(24.dp))
+        }
     }
 }
 
@@ -500,5 +523,5 @@ fun CategoriasRow(categorias: List<String>) {
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun CashbackScreenPreview() {
-    CashbackScreen()
+    CashbackScreen(navController = rememberNavController())
 }
