@@ -1,0 +1,23 @@
+.card {
+  max-width: 640px;
+  margin: 3rem auto;
+  padding: 2rem;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.botao {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.6rem 1.2rem;
+  background: #2e7d32;
+  color: #fff;
+  border-radius: 4px;
+  text-decoration: none;
+}
+
+.botao:hover {
+  background: #1b5e20;
+}
