@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,22 +19,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LocalMall
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -56,7 +49,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
 import br.com.fiap.solidarizeapp.R
+import br.com.fiap.solidarizeapp.navigation.SolidariBottomBar
 
 private val SolidariGreen = Color(0xFF95D5B2)
 private val SolidariMint = Color(0xFFB5EAD7)
@@ -72,7 +68,7 @@ private val MarkerBrown = Color(0xFF8A6B56)
 private val OverlayMap = Color(0x4434484A)
 
 @Composable
-fun LocationScreen() {
+fun LocationScreen(navController: NavHostController) {
     var selectedFilter by remember { mutableStateOf("Todos os Pontos") }
 
     Box(
@@ -89,6 +85,7 @@ fun LocationScreen() {
         }
 
         BottomCardAndNav(
+            navController = navController,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
@@ -353,7 +350,7 @@ private fun MarkerWithLabel(
 }
 
 @Composable
-private fun BottomCardAndNav(modifier: Modifier = Modifier) {
+private fun BottomCardAndNav(navController: NavHostController, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth()) {
         Card(
             modifier = Modifier
@@ -442,71 +439,12 @@ private fun BottomCardAndNav(modifier: Modifier = Modifier) {
             }
         }
 
-        BottomNavigationSection()
-    }
-}
-
-@Composable
-private fun BottomNavigationSection() {
-    NavigationBar(
-        modifier = Modifier.navigationBarsPadding(),
-        containerColor = Color(0xFFE8ECEE),
-        tonalElevation = 0.dp
-    ) {
-        NavigationBarItem(
-            selected = true,
-            onClick = {},
-            icon = { Icon(Icons.Default.Map, contentDescription = null) },
-            label = { Text("Localização") },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = DarkGreen,
-                selectedTextColor = DarkGreen,
-                indicatorColor = SolidariMint,
-                unselectedIconColor = SubtleText,
-                unselectedTextColor = SubtleText
-            )
-        )
-
-        NavigationBarItem(
-            selected = false,
-            onClick = {},
-            icon = { Icon(Icons.Default.AttachMoney, contentDescription = null) },
-            label = { Text("Cashback") },
-            colors = NavigationBarItemDefaults.colors(
-                unselectedIconColor = SubtleText,
-                unselectedTextColor = SubtleText,
-                indicatorColor = Color.Transparent
-            )
-        )
-
-        NavigationBarItem(
-            selected = false,
-            onClick = {},
-            icon = { Icon(Icons.Default.Person, contentDescription = null) },
-            label = { Text("Perfil") },
-            colors = NavigationBarItemDefaults.colors(
-                unselectedIconColor = SubtleText,
-                unselectedTextColor = SubtleText,
-                indicatorColor = Color.Transparent
-            )
-        )
-
-        NavigationBarItem(
-            selected = false,
-            onClick = {},
-            icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-            label = { Text("Opções") },
-            colors = NavigationBarItemDefaults.colors(
-                unselectedIconColor = SubtleText,
-                unselectedTextColor = SubtleText,
-                indicatorColor = Color.Transparent
-            )
-        )
+        SolidariBottomBar(navController)
     }
 }
 
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 private fun LocationScreenPreview() {
-    LocationScreen()
+    LocationScreen(navController = rememberNavController())
 }
