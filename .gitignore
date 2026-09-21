@@ -14,7 +14,8 @@
 .cxx
 local.properties
 
+.claude/
+
 # backend (Spring Boot)
 backend/build/
-backend/data/*.mv.db
-backend/data/*.trace.db
+backend/data/

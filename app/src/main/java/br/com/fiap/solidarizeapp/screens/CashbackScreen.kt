@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,8 +52,10 @@ data class Parceiro(
     val nome: String,
     val descricao: String,
     val badge: String,
-    val imagemUrl: String,       // URL da imagem — futuramente vem do backend
-    val destaque: Boolean = false
+    val imagemUrl: String,
+    val destaque: Boolean = false,
+    val categoria: String = "",
+    val percentualCashback: Double = 0.0
 )
 
 // ---------------------------------------------------------------------------
@@ -105,10 +108,34 @@ fun CashbackScreen(
     parceiros: List<Parceiro> = parceirosExemplo,
     categorias: List<String> = categoriasExemplo,
     arvoresPlantadas: Int = 12,
-    refeicoesServidas: Int = 40
+    refeicoesServidas: Int = 40,
+    aviso: String? = null,
+    onAvisoExibido: () -> Unit = {},
+    onDoar: (Double, String) -> Unit = { _, _ -> },
+    onHistoricoClick: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val escopo = rememberCoroutineScope()
+    var dialogoAberto by remember { mutableStateOf(false) }
+    var categoriaSelecionada by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(aviso) {
+        if (aviso != null) {
+            snackbarHostState.showSnackbar(aviso)
+            onAvisoExibido()
+        }
+    }
+
+    if (dialogoAberto) {
+        DialogoDoacao(
+            saldo = usuario.saldo,
+            onFechar = { dialogoAberto = false },
+            onConfirmar = { valor, categoria ->
+                dialogoAberto = false
+                onDoar(valor, categoria)
+            }
+        )
+    }
 
     Scaffold(
         containerColor = BackgroundStart,
@@ -132,12 +159,8 @@ fun CashbackScreen(
             Spacer(modifier = Modifier.height(16.dp))
             SaldoCard(
                 saldo = usuario.saldo,
-                onDoarClick = {
-                    escopo.launch { snackbarHostState.showSnackbar("Selecione uma causa na Home para doar seu crédito.") }
-                },
-                onHistoricoClick = {
-                    escopo.launch { snackbarHostState.showSnackbar("Histórico completo chega na próxima fase.") }
-                }
+                onDoarClick = { dialogoAberto = true },
+                onHistoricoClick = onHistoricoClick
             )
             Spacer(modifier = Modifier.height(24.dp))
             ImpactoSection(
@@ -146,10 +169,119 @@ fun CashbackScreen(
                 impactos = impactos
             )
             Spacer(modifier = Modifier.height(24.dp))
-            ParceirosSection(parceiros = parceiros)
-            Spacer(modifier = Modifier.height(16.dp))
-            CategoriasRow(categorias = categorias)
+            ParceirosSection(
+                parceiros = parceiros,
+                categorias = categorias,
+                categoriaSelecionada = categoriaSelecionada,
+                onSelecionarCategoria = { categoriaSelecionada = it }
+            )
             Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun DialogoDoacao(
+    saldo: Double,
+    onFechar: () -> Unit,
+    onConfirmar: (Double, String) -> Unit
+) {
+    var valorTexto by remember { mutableStateOf("") }
+    var categoria by remember { mutableStateOf("RESTAURACAO_AMBIENTAL") }
+
+    val valor = valorTexto.replace(',', '.').toDoubleOrNull()
+    val valido = valor != null && valor > 0 && valor <= saldo
+
+    AlertDialog(
+        onDismissRequest = onFechar,
+        containerColor = White,
+        title = {
+            Text(text = "Doar crédito", fontWeight = FontWeight.Bold, color = GreenDark)
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Disponível: R$ " + "%.2f".format(saldo).replace('.', ','),
+                    fontSize = 13.sp,
+                    color = TextSecondary
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = valorTexto,
+                    onValueChange = { valorTexto = it },
+                    label = { Text("Valor") },
+                    placeholder = { Text("0,00") },
+                    singleLine = true,
+                    isError = valorTexto.isNotBlank() && !valido,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (valorTexto.isNotBlank() && valor != null && valor > saldo) {
+                    Text(
+                        text = "Valor acima do seu saldo.",
+                        fontSize = 12.sp,
+                        color = Color(0xFFB42318)
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(text = "Destino", fontSize = 13.sp, color = TextSecondary)
+                Spacer(modifier = Modifier.height(8.dp))
+                OpcaoCategoria(
+                    titulo = "Restauração ambiental",
+                    detalhe = "R$ 10 plantam uma árvore",
+                    selecionado = categoria == "RESTAURACAO_AMBIENTAL",
+                    onClick = { categoria = "RESTAURACAO_AMBIENTAL" }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OpcaoCategoria(
+                    titulo = "Bem-estar comunitário",
+                    detalhe = "R$ 5 servem uma refeição",
+                    selecionado = categoria == "BEM_ESTAR_COMUNITARIO",
+                    onClick = { categoria = "BEM_ESTAR_COMUNITARIO" }
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { valor?.let { onConfirmar(it, categoria) } },
+                enabled = valido,
+                colors = ButtonDefaults.buttonColors(containerColor = GreenAccent),
+                shape = RoundedCornerShape(50.dp)
+            ) {
+                Text(text = "Confirmar", color = White)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onFechar) {
+                Text(text = "Cancelar", color = TextSecondary)
+            }
+        }
+    )
+}
+
+@Composable
+private fun OpcaoCategoria(
+    titulo: String,
+    detalhe: String,
+    selecionado: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selecionado) GreenLight.copy(alpha = 0.18f) else Color(0xFFF2F3F7))
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selecionado,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(selectedColor = GreenAccent)
+        )
+        Column {
+            Text(text = titulo, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = GreenDark)
+            Text(text = detalhe, fontSize = 12.sp, color = TextSecondary)
         }
     }
 }
@@ -290,7 +422,7 @@ fun ImpactoSection(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "Ao usar nossos parceiros, você ajudou a plantar $arvoresPlantadas árvores e forneceu $refeicoesServidas refeições só este mês.",
+            text = "Com suas doações você já ajudou a plantar $arvoresPlantadas árvores e a servir $refeicoesServidas refeições.",
             fontSize = 14.sp,
             color = TextSecondary,
             lineHeight = 20.sp
@@ -331,54 +463,83 @@ fun ImpactoCard(impacto: ImpactoItem, modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------------------
 
 @Composable
-fun ParceirosSection(parceiros: List<Parceiro>) {
+fun ParceirosSection(
+    parceiros: List<Parceiro>,
+    categorias: List<String>,
+    categoriaSelecionada: String?,
+    onSelecionarCategoria: (String?) -> Unit
+) {
+    val visiveis = if (categoriaSelecionada == null) {
+        parceiros
+    } else {
+        parceiros.filter { it.categoria == categoriaSelecionada }
+    }
+
     Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Vantagens dos Parceiros",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
-            )
-            Text(
-                text = "Ver tudo",
-                fontSize = 13.sp,
-                color = GreenAccent,
-                modifier = Modifier.clickable { }
-            )
-        }
-        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "Vantagens dos Parceiros",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Consuma nesses lugares e parte do valor volta como crédito.",
+            fontSize = 13.sp,
+            color = TextSecondary
+        )
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // Card grande — primeiro parceiro
-        parceiros.firstOrNull()?.let { parceiro ->
-            ParceiroCardGrande(parceiro = parceiro)
-            Spacer(modifier = Modifier.height(6.dp))
-            // Nome e descrição fora do card, igual ao design
-            Text(
-                text = parceiro.nome,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
-            )
-            Text(
-                text = parceiro.descricao,
-                fontSize = 12.sp,
-                color = TextSecondary
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-        }
+        CategoriasRow(
+            categorias = categorias,
+            selecionada = categoriaSelecionada,
+            onSelecionar = onSelecionarCategoria
+        )
 
-        // Cards pequenos — restantes
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            parceiros.drop(1).forEach { parceiro ->
-                ParceiroCardPequeno(
-                    parceiro = parceiro,
-                    modifier = Modifier.weight(1f)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (visiveis.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(White)
+                    .padding(28.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Nenhum parceiro nesta categoria ainda.",
+                    fontSize = 14.sp,
+                    color = TextSecondary
                 )
+            }
+            return@Column
+        }
+
+        val destacado = visiveis.firstOrNull { it.destaque } ?: visiveis.first()
+        val demais = visiveis.filter { it !== destacado }
+
+        ParceiroCardGrande(parceiro = destacado)
+
+        if (demais.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            demais.chunked(2).forEach { linha ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    linha.forEach { parceiro ->
+                        ParceiroCardPequeno(
+                            parceiro = parceiro,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    // Mantém o alinhamento quando a última linha tem um item só.
+                    if (linha.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
             }
         }
     }
@@ -386,47 +547,51 @@ fun ParceirosSection(parceiros: List<Parceiro>) {
 
 @Composable
 fun ParceiroCardGrande(parceiro: Parceiro) {
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .background(White)
     ) {
-        // Imagem de fundo
-        AsyncImage(
-            model = parceiro.imagemUrl,
-            contentDescription = parceiro.nome,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // Overlay escuro sutil pra legibilidade
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            GreenDark.copy(alpha = 0.4f)
+                .fillMaxWidth()
+                .height(170.dp)
+        ) {
+            ImagemParceiro(parceiro = parceiro)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, GreenDark.copy(alpha = 0.55f))
                         )
                     )
-                )
-        )
+            )
 
-        // Badge no topo esquerdo
-        Box(
-            modifier = Modifier
-                .padding(12.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(GreenAccent.copy(alpha = 0.9f))
-                .padding(horizontal = 10.dp, vertical = 4.dp)
-        ) {
+            SeloCashback(
+                percentual = parceiro.percentualCashback,
+                badge = parceiro.badge,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
+            )
+        }
+
+        Column(modifier = Modifier.padding(14.dp)) {
             Text(
-                text = parceiro.badge,
-                fontSize = 11.sp,
+                text = parceiro.nome,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = White
+                color = TextPrimary
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = parceiro.descricao,
+                fontSize = 12.sp,
+                color = TextSecondary,
+                lineHeight = 16.sp
             )
         }
     }
@@ -434,85 +599,137 @@ fun ParceiroCardGrande(parceiro: Parceiro) {
 
 @Composable
 fun ParceiroCardPequeno(parceiro: Parceiro, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(White)
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(110.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .height(96.dp)
         ) {
-            // Imagem de fundo
-            AsyncImage(
-                model = parceiro.imagemUrl,
-                contentDescription = parceiro.nome,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+            ImagemParceiro(parceiro = parceiro)
 
-            // Badge no topo esquerdo
-            Box(
+            SeloCashback(
+                percentual = parceiro.percentualCashback,
+                badge = parceiro.badge,
+                compacto = true,
                 modifier = Modifier
+                    .align(Alignment.TopStart)
                     .padding(8.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(GreenDark.copy(alpha = 0.85f))
-                    .padding(horizontal = 6.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    text = parceiro.badge,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = White
-                )
-            }
+            )
         }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = parceiro.nome,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary
+
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp)) {
+            Text(
+                text = parceiro.nome,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = parceiro.categoria.ifBlank { parceiro.descricao },
+                fontSize = 11.sp,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun ImagemParceiro(parceiro: Parceiro) {
+    if (parceiro.imagemUrl.isBlank()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(listOf(GreenLight, GreenDark)))
         )
-        Text(
-            text = parceiro.descricao,
-            fontSize = 11.sp,
-            color = TextSecondary
+    } else {
+        AsyncImage(
+            model = parceiro.imagemUrl,
+            contentDescription = parceiro.nome,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
 
-// ---------------------------------------------------------------------------
-// Chips de categoria
-// ---------------------------------------------------------------------------
+@Composable
+private fun SeloCashback(
+    percentual: Double,
+    badge: String,
+    modifier: Modifier = Modifier,
+    compacto: Boolean = false
+) {
+    val texto = if (percentual > 0) {
+        "${"%.0f".format(percentual)}% de volta"
+    } else {
+        badge
+    }
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(50.dp))
+            .background(GreenDark.copy(alpha = 0.88f))
+            .padding(horizontal = if (compacto) 8.dp else 11.dp, vertical = if (compacto) 3.dp else 5.dp)
+    ) {
+        Text(
+            text = texto,
+            fontSize = if (compacto) 9.sp else 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = White
+        )
+    }
+}
 
 @Composable
-fun CategoriasRow(categorias: List<String>) {
-    var categoriaSelecionada by remember { mutableStateOf(categorias.firstOrNull()) }
-
+fun CategoriasRow(
+    categorias: List<String>,
+    selecionada: String?,
+    onSelecionar: (String?) -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        ChipCategoria(
+            rotulo = "Todos",
+            selecionada = selecionada == null,
+            onClick = { onSelecionar(null) }
+        )
         categorias.forEach { categoria ->
-            val selecionada = categoria == categoriaSelecionada
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50.dp))
-                    .background(
-                        if (selecionada) GreenLight.copy(alpha = 0.25f) else White
-                    )
-                    .clickable { categoriaSelecionada = categoria }
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = categoria,
-                    fontSize = 13.sp,
-                    color = if (selecionada) GreenDark else TextSecondary,
-                    fontWeight = if (selecionada) FontWeight.SemiBold else FontWeight.Normal
-                )
-            }
+            ChipCategoria(
+                rotulo = categoria,
+                selecionada = categoria == selecionada,
+                onClick = { onSelecionar(if (categoria == selecionada) null else categoria) }
+            )
         }
+    }
+}
+
+@Composable
+private fun ChipCategoria(rotulo: String, selecionada: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50.dp))
+            .background(if (selecionada) GreenDark else White)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 9.dp)
+    ) {
+        Text(
+            text = rotulo,
+            fontSize = 13.sp,
+            color = if (selecionada) White else TextSecondary,
+            fontWeight = if (selecionada) FontWeight.SemiBold else FontWeight.Normal
+        )
     }
 }
 

@@ -43,6 +43,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
@@ -57,7 +58,9 @@ import br.com.fiap.solidarizeapp.ui.theme.nunitoFamily
 
 @Composable
 fun LoginScreen(
-    onLoginClick: () -> Unit = {},
+    onLoginClick: (String, String) -> Unit = { _, _ -> },
+    carregando: Boolean = false,
+    erro: String? = null,
     onBiometricClick: () -> Unit = {},
     onGoogleClick: () -> Unit = {},
     onFacebookClick: () -> Unit = {},
@@ -199,6 +202,18 @@ fun LoginScreen(
                         singleLine = true
                     )
 
+                    if (erro != null) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = erro,
+                            color = Color(0xFFB42318),
+                            fontSize = 13.sp,
+                            fontFamily = nunitoFamily,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(28.dp))
 
                     Box(
@@ -214,7 +229,7 @@ fun LoginScreen(
                                 ),
                                 shape = RoundedCornerShape(50.dp)
                             )
-                            .clickable { onLoginClick() },
+                            .clickable(enabled = !carregando) { onLoginClick(email, password) },
                         contentAlignment = Alignment.Center
                     ) {
                         Row(
@@ -222,7 +237,7 @@ fun LoginScreen(
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = stringResource(R.string.btn_login),
+                                text = if (carregando) "Entrando..." else stringResource(R.string.btn_login),
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 fontSize = 17.sp,
                                 fontFamily = nunitoFamily,

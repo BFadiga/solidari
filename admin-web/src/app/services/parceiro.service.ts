@@ -22,6 +22,10 @@ export class ParceiroService {
     return this.http.post<Parceiro>(this.url, parceiro, { headers: this.headersAutenticadas() });
   }
 
+  atualizar(id: number, parceiro: Parceiro): Observable<Parceiro> {
+    return this.http.put<Parceiro>(`${this.url}/${id}`, parceiro, { headers: this.headersAutenticadas() });
+  }
+
   remover(id: number): Observable<void> {
     return this.http.delete<void>(`${this.url}/${id}`, { headers: this.headersAutenticadas() });
   }

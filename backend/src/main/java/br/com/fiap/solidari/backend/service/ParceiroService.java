@@ -2,10 +2,12 @@ package br.com.fiap.solidari.backend.service;
 
 import java.util.List;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import br.com.fiap.solidari.backend.dto.ParceiroRequest;
 import br.com.fiap.solidari.backend.exception.RecursoNaoEncontradoException;
+import br.com.fiap.solidari.backend.exception.RegraNegocioException;
 import br.com.fiap.solidari.backend.model.Parceiro;
 import br.com.fiap.solidari.backend.repository.ParceiroRepository;
 
@@ -44,7 +46,14 @@ public class ParceiroService {
 
     public void remover(Long id) {
         Parceiro parceiro = buscarPorId(id);
-        parceiroRepository.delete(parceiro);
+        try {
+            parceiroRepository.delete(parceiro);
+            parceiroRepository.flush();
+        } catch (DataIntegrityViolationException ex) {
+            throw new RegraNegocioException(
+                    "Não é possível remover " + parceiro.getNome()
+                    + ": há compras ou doações vinculadas a este parceiro");
+        }
     }
 
     private void preencher(Parceiro parceiro, ParceiroRequest request) {
@@ -52,6 +61,7 @@ public class ParceiroService {
         parceiro.setDescricao(request.descricao());
         parceiro.setCategoria(request.categoria());
         parceiro.setBadge(request.badge());
+        parceiro.setPercentualCashback(request.percentualCashback());
         parceiro.setImagemUrl(request.imagemUrl());
         parceiro.setDestaque(request.destaque());
         parceiro.setLatitude(request.latitude());

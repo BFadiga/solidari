@@ -1,5 +1,7 @@
 package br.com.fiap.solidari.backend.service;
 
+import java.math.BigDecimal;
+
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -50,7 +52,7 @@ public class AuthService {
         usuario.setEmail(request.email());
         usuario.setSenha(passwordEncoder.encode(request.senha()));
         usuario.setPapel(Papel.USUARIO);
-        usuario.setSaldo(0.0);
+        usuario.setSaldo(BigDecimal.ZERO);
 
         usuario = usuarioRepository.save(usuario);
 

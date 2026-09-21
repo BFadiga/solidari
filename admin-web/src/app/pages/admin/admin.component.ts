@@ -1,51 +1,44 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Parceiro } from '../../models/parceiro.model';
+import { RouterLink } from '@angular/router';
+import { Alerta, Parceiro, ResultadoCashback } from '../../models/parceiro.model';
 import { AuthService } from '../../services/auth.service';
 import { ParceiroService } from '../../services/parceiro.service';
+import { RotinasService } from '../../services/rotinas.service';
 
 @Component({
   selector: 'app-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './admin.component.html',
   styleUrl: './admin.component.css'
 })
 export class AdminComponent implements OnInit {
 
   parceiros: Parceiro[] = [];
+  alertas: Alerta[] = [];
   carregando = false;
   mensagem = '';
   erro = false;
 
-  email = '';
-  senha = '';
+  ultimoCashback: ResultadoCashback | null = null;
+  ultimosAlertasGerados: number | null = null;
 
   novoParceiro: Parceiro = this.parceiroVazio();
+  emEdicao: Parceiro | null = null;
 
-  constructor(private auth: AuthService, private parceiroService: ParceiroService) {}
+  constructor(
+    public auth: AuthService,
+    private parceiroService: ParceiroService,
+    private rotinas: RotinasService
+  ) {}
 
   ngOnInit(): void {
     this.carregarParceiros();
-  }
-
-  get autenticado(): boolean {
-    return this.auth.estaAutenticado;
-  }
-
-  entrar(): void {
-    this.auth.login(this.email, this.senha).subscribe({
-      next: () => {
-        this.exibirMensagem('Login realizado com sucesso.', false);
-        this.senha = '';
-      },
-      error: () => this.exibirMensagem('E-mail ou senha inválidos.', true)
-    });
-  }
-
-  sair(): void {
-    this.auth.logout();
+    if (this.auth.ehAdmin) {
+      this.carregarAlertas();
+    }
   }
 
   carregarParceiros(): void {
@@ -56,20 +49,49 @@ export class AdminComponent implements OnInit {
         this.carregando = false;
       },
       error: () => {
-        this.exibirMensagem('Não foi possível carregar os parceiros.', true);
+        this.avisar('Não foi possível carregar os parceiros.', true);
         this.carregando = false;
       }
+    });
+  }
+
+  carregarAlertas(): void {
+    this.rotinas.listarAlertas().subscribe({
+      next: (lista) => this.alertas = lista,
+      error: () => this.alertas = []
     });
   }
 
   criarParceiro(): void {
     this.parceiroService.criar(this.novoParceiro).subscribe({
       next: () => {
-        this.exibirMensagem('Parceiro criado com sucesso.', false);
+        this.avisar('Parceiro cadastrado.', false);
         this.novoParceiro = this.parceiroVazio();
         this.carregarParceiros();
       },
-      error: () => this.exibirMensagem('Erro ao criar parceiro. Faça login como administrador.', true)
+      error: (e) => this.avisar(this.mensagemDoErro(e, 'Não foi possível cadastrar o parceiro.'), true)
+    });
+  }
+
+  editar(parceiro: Parceiro): void {
+    this.emEdicao = { ...parceiro };
+  }
+
+  cancelarEdicao(): void {
+    this.emEdicao = null;
+  }
+
+  salvarEdicao(): void {
+    if (!this.emEdicao?.id) {
+      return;
+    }
+    this.parceiroService.atualizar(this.emEdicao.id, this.emEdicao).subscribe({
+      next: () => {
+        this.avisar('Parceiro atualizado.', false);
+        this.emEdicao = null;
+        this.carregarParceiros();
+      },
+      error: (e) => this.avisar(this.mensagemDoErro(e, 'Não foi possível salvar as alterações.'), true)
     });
   }
 
@@ -79,19 +101,56 @@ export class AdminComponent implements OnInit {
     }
     this.parceiroService.remover(id).subscribe({
       next: () => {
-        this.exibirMensagem('Parceiro removido.', false);
+        this.avisar('Parceiro removido.', false);
         this.carregarParceiros();
       },
-      error: () => this.exibirMensagem('Erro ao remover parceiro. Faça login como administrador.', true)
+      error: (e) => this.avisar(this.mensagemDoErro(e, 'Não foi possível remover o parceiro.'), true)
     });
   }
 
-  private exibirMensagem(texto: string, ehErro: boolean): void {
+  processarCashback(): void {
+    this.rotinas.processarCashback().subscribe({
+      next: (resultado) => {
+        this.ultimoCashback = resultado;
+        this.avisar(`Apuração concluída: ${resultado.processadas} compra(s) creditada(s).`, false);
+      },
+      error: (e) => this.avisar(this.mensagemDoErro(e, 'Não foi possível apurar o cashback.'), true)
+    });
+  }
+
+  gerarAlertas(): void {
+    this.rotinas.gerarAlertas().subscribe({
+      next: (resultado) => {
+        this.ultimosAlertasGerados = resultado.gerados;
+        this.avisar(resultado.gerados === 0
+          ? 'Nenhuma pendência encontrada.'
+          : `Verificação concluída: ${resultado.gerados} pendência(s) encontrada(s).`, false);
+        this.carregarAlertas();
+      },
+      error: (e) => this.avisar(this.mensagemDoErro(e, 'Não foi possível verificar as pendências.'), true)
+    });
+  }
+
+  private avisar(texto: string, ehErro: boolean): void {
     this.mensagem = texto;
     this.erro = ehErro;
   }
 
+  private mensagemDoErro(e: any, padrao: string): string {
+    if (e?.status === 403) {
+      return 'Esta ação exige uma conta de administrador.';
+    }
+    return e?.error?.mensagem ?? padrao;
+  }
+
   private parceiroVazio(): Parceiro {
-    return { nome: '', descricao: '', categoria: '', badge: '', destaque: false };
+    return {
+      nome: '',
+      descricao: '',
+      categoria: '',
+      badge: '',
+      percentualCashback: 10,
+      destaque: false
+    };
   }
 }
