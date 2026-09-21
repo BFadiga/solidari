@@ -1,5 +1,7 @@
 package br.com.fiap.solidari.backend.model;
 
+import java.math.BigDecimal;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -27,6 +29,9 @@ public class Parceiro {
     @Column(nullable = false)
     private String badge;
 
+    @Column(name = "percentual_cashback", nullable = false, precision = 5, scale = 2)
+    private BigDecimal percentualCashback = BigDecimal.ZERO;
+
     @Column(name = "imagem_url")
     private String imagemUrl;
 
@@ -36,6 +41,9 @@ public class Parceiro {
     private Double latitude;
 
     private Double longitude;
+
+    @Column(nullable = false)
+    private Boolean ativo = true;
 
     public Long getId() {
         return id;
@@ -75,6 +83,22 @@ public class Parceiro {
 
     public void setBadge(String badge) {
         this.badge = badge;
+    }
+
+    public BigDecimal getPercentualCashback() {
+        return percentualCashback;
+    }
+
+    public void setPercentualCashback(BigDecimal percentualCashback) {
+        this.percentualCashback = percentualCashback;
+    }
+
+    public Boolean getAtivo() {
+        return ativo;
+    }
+
+    public void setAtivo(Boolean ativo) {
+        this.ativo = ativo;
     }
 
     public String getImagemUrl() {

@@ -1,23 +1,131 @@
-.topo {
+.barra {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 1rem 2rem;
-  background: #1b5e20;
+  gap: 28px;
+  padding: 0 28px;
+  height: 66px;
+  background: var(--verde-escuro);
   color: #fff;
+  box-shadow: 0 2px 14px rgba(27, 67, 50, 0.22);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .marca {
-  font-weight: bold;
-  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+
+.marca svg {
+  color: var(--verde-claro);
+}
+
+nav {
+  display: flex;
+  gap: 4px;
 }
 
 nav a {
-  color: #fff;
+  color: rgba(255, 255, 255, 0.78);
   text-decoration: none;
-  margin-left: 1.5rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 nav a:hover {
-  text-decoration: underline;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+nav a.ativo {
+  background: rgba(82, 183, 136, 0.22);
+  color: #fff;
+}
+
+.sessao {
+  margin-left: auto;
+}
+
+.btn-entrar {
+  display: inline-block;
+  padding: 9px 20px;
+  border-radius: 8px;
+  background: var(--verde-claro);
+  color: var(--verde-escuro);
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.btn-entrar:hover {
+  filter: brightness(1.06);
+}
+
+.usuario {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.inicial {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--verde-claro);
+  color: var(--verde-escuro);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+.dados {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.nome {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.papel {
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.btn-sair {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  padding: 7px 14px;
+  font-size: 0.82rem;
+}
+
+.btn-sair:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+@media (max-width: 720px) {
+  .barra {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    gap: 12px;
+  }
+
+  .dados {
+    display: none;
+  }
 }

@@ -1,5 +1,6 @@
 package br.com.fiap.solidari.backend.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import br.com.fiap.solidari.backend.model.CategoriaImpacto;
@@ -7,7 +8,7 @@ import br.com.fiap.solidari.backend.model.Doacao;
 
 public record DoacaoResponse(
         Long id,
-        Double valor,
+        BigDecimal valor,
         CategoriaImpacto categoriaImpacto,
         LocalDateTime data,
         String parceiroNome

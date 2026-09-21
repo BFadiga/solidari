@@ -10,10 +10,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.com.fiap.solidari.backend.dto.DoacaoRequest;
 import br.com.fiap.solidari.backend.dto.DoacaoResponse;
+import br.com.fiap.solidari.backend.dto.ExtratoResponse;
 import br.com.fiap.solidari.backend.dto.ImpactoResponse;
 import br.com.fiap.solidari.backend.model.Usuario;
 import br.com.fiap.solidari.backend.service.DoacaoService;
@@ -51,6 +53,19 @@ public class DoacaoController {
     public List<DoacaoResponse> historico(@AuthenticationPrincipal UserDetails userDetails) {
         Usuario usuario = usuarioService.buscarPorEmail(userDetails.getUsername());
         return doacaoService.historico(usuario.getId()).stream().map(DoacaoResponse::de).toList();
+    }
+
+    @GetMapping("/extrato")
+    @Operation(summary = "Extrato de doações já formatado pela function fn_extrato_formatado")
+    public ExtratoResponse extrato(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(defaultValue = "10") int limite
+    ) {
+        Usuario usuario = usuarioService.buscarPorEmail(userDetails.getUsername());
+        return new ExtratoResponse(
+                doacaoService.extrato(usuario.getId(), limite),
+                doacaoService.ranking(usuario.getId())
+        );
     }
 
     @GetMapping("/impacto")

@@ -1,0 +1,178 @@
+.vazio {
+  text-align: center;
+  padding: 44px 24px;
+}
+
+.vazio p {
+  color: var(--texto-suave);
+  margin: 8px auto 20px;
+  max-width: 420px;
+}
+
+.link-botao {
+  display: inline-block;
+  text-decoration: none;
+  padding: 12px 26px;
+  border-radius: var(--raio-pequeno);
+  background: linear-gradient(135deg, var(--verde-escuro), var(--verde-claro));
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.94rem;
+}
+
+.painel-saldo {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 2fr;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.saldo {
+  background: linear-gradient(135deg, var(--verde-escuro) 0%, var(--verde) 55%, var(--verde-claro) 100%);
+  color: #fff;
+  border-radius: var(--raio);
+  padding: 26px;
+  box-shadow: var(--sombra-forte);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.saldo .rotulo {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.saldo strong {
+  font-size: 2.35rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.saldo .detalhe {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.impactos {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.impacto {
+  background: var(--superficie);
+  border-radius: var(--raio);
+  box-shadow: var(--sombra);
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.impacto svg {
+  color: var(--verde-claro);
+  margin-bottom: 6px;
+}
+
+.impacto strong {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--verde-escuro);
+  letter-spacing: -0.02em;
+}
+
+.impacto span {
+  font-size: 0.82rem;
+  color: var(--texto-suave);
+}
+
+.colunas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.cartao {
+  margin-bottom: 18px;
+}
+
+.colunas .cartao {
+  margin-bottom: 0;
+}
+
+.apoio {
+  color: var(--texto-suave);
+  font-size: 0.88rem;
+  margin: 6px 0 18px;
+}
+
+.opcional {
+  font-weight: 400;
+  color: var(--texto-tenue);
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+form button {
+  margin-top: 2px;
+  align-self: flex-start;
+}
+
+.previsao {
+  font-size: 0.86rem;
+  color: var(--verde);
+  background: var(--verde-suave);
+  padding: 10px 13px;
+  border-radius: var(--raio-pequeno);
+}
+
+.recibo {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.8rem;
+  line-height: 1.65;
+  color: var(--texto);
+  background: #fbfcfe;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio-pequeno);
+  padding: 20px 22px;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.forte {
+  font-weight: 700;
+}
+
+.situacao-processada {
+  background: var(--verde-suave);
+  color: var(--verde-escuro);
+}
+
+.situacao-pendente {
+  background: var(--alerta-fundo);
+  color: var(--alerta);
+}
+
+.situacao-erro {
+  background: var(--perigo-fundo);
+  color: var(--perigo);
+}
+
+@media (max-width: 900px) {
+  .painel-saldo {
+    grid-template-columns: 1fr;
+  }
+
+  .impactos {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+}

@@ -8,58 +8,41 @@ import org.springframework.transaction.annotation.Transactional;
 import br.com.fiap.solidari.backend.dto.DoacaoRequest;
 import br.com.fiap.solidari.backend.dto.ImpactoResponse;
 import br.com.fiap.solidari.backend.exception.RecursoNaoEncontradoException;
-import br.com.fiap.solidari.backend.exception.RegraNegocioException;
-import br.com.fiap.solidari.backend.model.CategoriaImpacto;
 import br.com.fiap.solidari.backend.model.Doacao;
-import br.com.fiap.solidari.backend.model.Parceiro;
 import br.com.fiap.solidari.backend.model.Usuario;
 import br.com.fiap.solidari.backend.repository.DoacaoRepository;
-import br.com.fiap.solidari.backend.repository.ParceiroRepository;
-import br.com.fiap.solidari.backend.repository.UsuarioRepository;
+import br.com.fiap.solidari.backend.repository.jdbc.FunctionRepository;
+import br.com.fiap.solidari.backend.repository.jdbc.ProcedureRepository;
 
 @Service
 public class DoacaoService {
 
-    private static final double VALOR_POR_ARVORE = 10.0;
-    private static final double VALOR_POR_REFEICAO = 5.0;
-
     private final DoacaoRepository doacaoRepository;
-    private final UsuarioRepository usuarioRepository;
-    private final ParceiroRepository parceiroRepository;
+    private final ProcedureRepository procedures;
+    private final FunctionRepository functions;
 
     public DoacaoService(
             DoacaoRepository doacaoRepository,
-            UsuarioRepository usuarioRepository,
-            ParceiroRepository parceiroRepository
+            ProcedureRepository procedures,
+            FunctionRepository functions
     ) {
         this.doacaoRepository = doacaoRepository;
-        this.usuarioRepository = usuarioRepository;
-        this.parceiroRepository = parceiroRepository;
+        this.procedures = procedures;
+        this.functions = functions;
     }
 
     @Transactional
     public Doacao doar(Usuario usuario, DoacaoRequest request) {
-        if (usuario.getSaldo() < request.valor()) {
-            throw new RegraNegocioException("Saldo insuficiente para esta doação");
-        }
+        Long doacaoId = procedures.registrarDoacao(
+                usuario.getId(),
+                request.parceiroId(),
+                request.valor(),
+                request.categoriaImpacto()
+        );
 
-        Parceiro parceiro = null;
-        if (request.parceiroId() != null) {
-            parceiro = parceiroRepository.findById(request.parceiroId())
-                    .orElseThrow(() -> new RecursoNaoEncontradoException(
-                            "Parceiro não encontrado: id " + request.parceiroId()));
-        }
-
-        usuario.setSaldo(usuario.getSaldo() - request.valor());
-        usuarioRepository.save(usuario);
-
-        Doacao doacao = new Doacao();
-        doacao.setUsuario(usuario);
-        doacao.setParceiro(parceiro);
-        doacao.setValor(request.valor());
-        doacao.setCategoriaImpacto(request.categoriaImpacto());
-
-        return doacaoRepository.save(doacao);
+        return doacaoRepository.findById(doacaoId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException(
+                        "Doacao " + doacaoId + " nao encontrada apos o registro"));
     }
 
     public List<Doacao> historico(Long usuarioId) {
@@ -67,14 +50,14 @@ public class DoacaoService {
     }
 
     public ImpactoResponse calcularImpacto(Long usuarioId) {
-        double totalAmbiental = doacaoRepository.somarValorPorCategoria(
-                usuarioId, CategoriaImpacto.RESTAURACAO_AMBIENTAL);
-        double totalComunitario = doacaoRepository.somarValorPorCategoria(
-                usuarioId, CategoriaImpacto.BEM_ESTAR_COMUNITARIO);
+        return functions.impactoDoUsuario(usuarioId);
+    }
 
-        long arvoresPlantadas = (long) (totalAmbiental / VALOR_POR_ARVORE);
-        long refeicoesServidas = (long) (totalComunitario / VALOR_POR_REFEICAO);
+    public String extrato(Long usuarioId, int limite) {
+        return functions.extratoFormatado(usuarioId, limite);
+    }
 
-        return new ImpactoResponse(arvoresPlantadas, refeicoesServidas, totalAmbiental + totalComunitario);
+    public int ranking(Long usuarioId) {
+        return functions.rankingDoador(usuarioId);
     }
 }

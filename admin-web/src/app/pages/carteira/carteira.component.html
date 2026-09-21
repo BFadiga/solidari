@@ -1,0 +1,152 @@
+<section class="secao">
+
+  <div class="cabecalho-secao">
+    <h1>Minha carteira</h1>
+    <p>Seu crédito de cashback e o impacto que ele já gerou.</p>
+  </div>
+
+  <p *ngIf="mensagem" class="aviso" [class.aviso-erro]="erro">{{ mensagem }}</p>
+
+  <div *ngIf="!auth.usuario()" class="cartao vazio">
+    <h2>Entre para ver sua carteira</h2>
+    <p>Acompanhe seu saldo, faça doações e veja quantas árvores e refeições você já garantiu.</p>
+    <a class="btn-primario link-botao" routerLink="/entrar">Entrar</a>
+  </div>
+
+  <div *ngIf="auth.usuario()">
+
+    <div class="painel-saldo">
+      <div class="saldo">
+        <span class="rotulo">Saldo disponível para doar</span>
+        <strong>{{ perfil?.saldo | currency:'BRL' }}</strong>
+        <span class="detalhe">Acumulado nas suas compras em parceiros</span>
+      </div>
+
+      <div class="impactos">
+        <div class="impacto">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path fill="currentColor" d="M12 2 6 12h3v3h6v-3h3L12 2Zm-1 15h2v5h-2v-5Z"/>
+          </svg>
+          <strong>{{ impacto?.arvoresPlantadas ?? 0 }}</strong>
+          <span>árvores plantadas</span>
+        </div>
+
+        <div class="impacto">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path fill="currentColor" d="M11 2v9a3 3 0 0 1-3 3v8H6v-8a3 3 0 0 1-3-3V2h2v7h1V2h2v7h1V2h2Zm7 0c2 0 3 3 3 7 0 3-1 4-2 4v9h-2V2Z"/>
+          </svg>
+          <strong>{{ impacto?.refeicoesServidas ?? 0 }}</strong>
+          <span>refeições servidas</span>
+        </div>
+
+        <div class="impacto">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path fill="currentColor" d="M12 2 9.2 8.6 2 9.2l5.5 4.7L5.8 21 12 17.3 18.2 21l-1.7-7.1L22 9.2l-7.2-.6L12 2Z"/>
+          </svg>
+          <strong>{{ extrato?.posicaoRanking ? '#' + extrato?.posicaoRanking : '—' }}</strong>
+          <span>entre os doadores</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="colunas">
+      <div class="cartao">
+        <h2>Doar crédito</h2>
+        <p class="apoio">Escolha para onde vai o seu impacto. Cada R$ 10 plantam uma árvore; cada R$ 5 servem uma refeição.</p>
+
+        <form (ngSubmit)="doar()" #doacaoForm="ngForm">
+          <label>
+            Quanto você quer doar
+            <input type="number" name="doacaoValor" step="0.01" min="0.01"
+                   placeholder="0,00" [(ngModel)]="doacaoValor" required>
+          </label>
+
+          <label>
+            Destino da doação
+            <select name="doacaoCategoria" [(ngModel)]="doacaoCategoria" required>
+              <option value="RESTAURACAO_AMBIENTAL">Restauração ambiental</option>
+              <option value="BEM_ESTAR_COMUNITARIO">Bem-estar comunitário</option>
+            </select>
+          </label>
+
+          <label>
+            Em nome de um parceiro <span class="opcional">(opcional)</span>
+            <select name="doacaoParceiro" [(ngModel)]="doacaoParceiroId">
+              <option [ngValue]="null">Doação direta</option>
+              <option *ngFor="let p of parceiros" [ngValue]="p.id">{{ p.nome }}</option>
+            </select>
+          </label>
+
+          <button type="submit" class="btn-primario" [disabled]="doacaoForm.invalid">Confirmar doação</button>
+        </form>
+      </div>
+
+      <div class="cartao">
+        <h2>Registrar uma compra</h2>
+        <p class="apoio">Informe o que você consumiu num parceiro. O cashback entra na sua carteira assim que for apurado.</p>
+
+        <form (ngSubmit)="registrarCompra()" #compraForm="ngForm">
+          <label>
+            Onde você comprou
+            <select name="compraParceiro" [(ngModel)]="compraParceiroId" required>
+              <option [ngValue]="null" disabled>Selecione um parceiro</option>
+              <option *ngFor="let p of parceiros" [ngValue]="p.id">
+                {{ p.nome }} · devolve {{ p.percentualCashback }}%
+              </option>
+            </select>
+          </label>
+
+          <label>
+            Valor da compra
+            <input type="number" name="compraValor" step="0.01" min="0.01"
+                   placeholder="0,00" [(ngModel)]="compraValor" required>
+          </label>
+
+          <p class="previsao" *ngIf="cashbackPrevisto() as previsto">
+            Você receberá cerca de <strong>{{ previsto | currency:'BRL' }}</strong> de volta.
+          </p>
+
+          <button type="submit" class="btn-primario" [disabled]="compraForm.invalid">Registrar compra</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="cartao">
+      <h2>Extrato de doações</h2>
+      <p class="apoio">Suas doações mais recentes.</p>
+      <pre class="recibo">{{ extrato?.extrato }}</pre>
+    </div>
+
+    <div class="cartao">
+      <h2>Minhas compras</h2>
+
+      <table *ngIf="transacoes.length > 0">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Parceiro</th>
+            <th>Valor</th>
+            <th>Cashback</th>
+            <th>Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let t of transacoes">
+            <td>{{ t.data | date:'dd/MM/yyyy' }}</td>
+            <td class="forte">{{ t.parceiroNome }}</td>
+            <td>{{ t.valor | currency:'BRL' }}</td>
+            <td>{{ t.cashbackGerado ? (t.cashbackGerado | currency:'BRL') : '—' }}</td>
+            <td>
+              <span class="etiqueta" [class]="'situacao-' + t.status.toLowerCase()">
+                {{ t.status === 'PROCESSADA' ? 'Creditado' : t.status === 'PENDENTE' ? 'Aguardando' : 'Com problema' }}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="apoio" *ngIf="transacoes.length === 0">Você ainda não registrou nenhuma compra.</p>
+    </div>
+
+  </div>
+</section>

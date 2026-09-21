@@ -1,82 +1,172 @@
-<section class="admin">
-  <h1>Administração de Parceiros</h1>
+<section class="secao">
 
-  <p *ngIf="mensagem" class="mensagem" [class.mensagem-erro]="erro">
-    {{ mensagem }}
-  </p>
-
-  <div class="login" *ngIf="!autenticado">
-    <h2>Login de administrador</h2>
-    <form (ngSubmit)="entrar()" #loginForm="ngForm">
-      <label>
-        E-mail
-        <input type="email" name="email" [(ngModel)]="email" required>
-      </label>
-      <label>
-        Senha
-        <input type="password" name="senha" [(ngModel)]="senha" required>
-      </label>
-      <button type="submit" [disabled]="loginForm.invalid">Entrar</button>
-    </form>
+  <div class="cabecalho-secao">
+    <h1>Parceiros</h1>
+    <p>Estabelecimentos que devolvem parte do consumo como crédito solidário.</p>
   </div>
 
-  <div class="painel" *ngIf="autenticado">
-    <div class="cabecalho-painel">
-      <span>Sessão de administrador ativa</span>
-      <button type="button" (click)="sair()">Sair</button>
+  <p *ngIf="mensagem" class="aviso" [class.aviso-erro]="erro">{{ mensagem }}</p>
+
+  <div *ngIf="!auth.ehAdmin" class="cartao faixa-acesso">
+    <div>
+      <h2>Modo somente leitura</h2>
+      <p>Cadastrar parceiros e executar as rotinas exige uma conta de administrador.</p>
+    </div>
+    <a class="link-botao" routerLink="/entrar">Entrar como administrador</a>
+  </div>
+
+  <div class="colunas-operacao" *ngIf="auth.ehAdmin">
+    <div class="cartao operacao">
+      <div class="icone">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path fill="currentColor" d="M12 3a9 9 0 1 0 8.5 12h-2.2A6.8 6.8 0 1 1 12 5.2c1.9 0 3.6.8 4.8 2H14v2.2h6V3.4h-2.2v1.9A9 9 0 0 0 12 3Z"/>
+        </svg>
+      </div>
+      <h2>Apurar cashback</h2>
+      <p>Converte as compras aguardando apuração em crédito na carteira de cada participante.</p>
+
+      <button type="button" class="btn-primario" (click)="processarCashback()">Apurar agora</button>
+
+      <div class="resultado" *ngIf="ultimoCashback as r">
+        <div><strong>{{ r.processadas }}</strong><span>compras creditadas</span></div>
+        <div><strong>{{ r.totalCreditado | currency:'BRL' }}</strong><span>distribuídos</span></div>
+        <div *ngIf="r.comErro > 0" class="com-erro"><strong>{{ r.comErro }}</strong><span>com problema</span></div>
+      </div>
     </div>
 
-    <h2>Novo parceiro</h2>
-    <form (ngSubmit)="criarParceiro()" #parceiroForm="ngForm" class="form-parceiro">
+    <div class="cartao operacao">
+      <div class="icone">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path fill="currentColor" d="M12 2 1 21h22L12 2Zm0 4.5L19.5 19h-15L12 6.5ZM11 10v4h2v-4h-2Zm0 5.5V18h2v-2.5h-2Z"/>
+        </svg>
+      </div>
+      <h2>Verificar pendências</h2>
+      <p>Procura crédito parado, parceiros sem movimento e compras que falharam na apuração.</p>
+
+      <button type="button" class="btn-secundario" (click)="gerarAlertas()">Verificar agora</button>
+
+      <div class="resultado" *ngIf="ultimosAlertasGerados !== null">
+        <div><strong>{{ ultimosAlertasGerados }}</strong><span>{{ ultimosAlertasGerados === 1 ? 'pendência encontrada' : 'pendências encontradas' }}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cartao" *ngIf="auth.ehAdmin && alertas.length > 0">
+    <h2>Pendências em aberto</h2>
+    <ul class="lista-alertas">
+      <li *ngFor="let a of alertas" [class]="'nivel-' + a.severidade.toLowerCase()">
+        <span class="marcador"></span>
+        <div>
+          <p class="descricao">{{ a.descricao }}</p>
+          <span class="quando">{{ a.criadoEm | date:'dd/MM/yyyy HH:mm' }}</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <div class="cartao" *ngIf="auth.ehAdmin">
+    <h2>Cadastrar parceiro</h2>
+    <p class="apoio">O percentual é o que volta para o participante a cada compra.</p>
+
+    <form (ngSubmit)="criarParceiro()" #parceiroForm="ngForm" class="formulario">
       <label>
         Nome
-        <input type="text" name="nome" [(ngModel)]="novoParceiro.nome" required>
+        <input type="text" name="nome" placeholder="Café do Bairro" [(ngModel)]="novoParceiro.nome" required>
       </label>
       <label>
         Categoria
-        <input type="text" name="categoria" [(ngModel)]="novoParceiro.categoria" required>
+        <input type="text" name="categoria" placeholder="Meio Ambiente" [(ngModel)]="novoParceiro.categoria" required>
       </label>
       <label>
         Descrição
-        <input type="text" name="descricao" [(ngModel)]="novoParceiro.descricao" required>
+        <input type="text" name="descricao" placeholder="Como o parceiro se apresenta" [(ngModel)]="novoParceiro.descricao" required>
       </label>
       <label>
-        Badge
-        <input type="text" name="badge" [(ngModel)]="novoParceiro.badge" required>
+        Selo exibido no app
+        <input type="text" name="badge" placeholder="10% CASHBACK" [(ngModel)]="novoParceiro.badge" required>
       </label>
-      <label class="checkbox">
+      <label>
+        Cashback (%)
+        <input type="number" name="percentual" step="0.01" min="0" max="100"
+               [(ngModel)]="novoParceiro.percentualCashback" required>
+      </label>
+      <label class="linha-checkbox">
+        <span>Exibir em destaque</span>
         <input type="checkbox" name="destaque" [(ngModel)]="novoParceiro.destaque">
-        Destaque
       </label>
-      <button type="submit" [disabled]="parceiroForm.invalid">Adicionar</button>
+      <button type="submit" class="btn-primario" [disabled]="parceiroForm.invalid">Cadastrar</button>
     </form>
   </div>
 
-  <h2>Parceiros cadastrados</h2>
-  <p *ngIf="carregando">Carregando...</p>
+  <div class="cartao">
+    <h2>Parceiros cadastrados <span class="contagem">{{ parceiros.length }}</span></h2>
 
-  <table *ngIf="!carregando && parceiros.length > 0">
-    <thead>
-      <tr>
-        <th>Nome</th>
-        <th>Categoria</th>
-        <th>Badge</th>
-        <th>Destaque</th>
-        <th *ngIf="autenticado"></th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr *ngFor="let parceiro of parceiros">
-        <td>{{ parceiro.nome }}</td>
-        <td>{{ parceiro.categoria }}</td>
-        <td>{{ parceiro.badge }}</td>
-        <td>{{ parceiro.destaque ? 'Sim' : 'Não' }}</td>
-        <td *ngIf="autenticado">
-          <button type="button" (click)="removerParceiro(parceiro.id)">Remover</button>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+    <p class="apoio" *ngIf="carregando">Carregando...</p>
 
-  <p *ngIf="!carregando && parceiros.length === 0">Nenhum parceiro cadastrado.</p>
+    <table *ngIf="!carregando && parceiros.length > 0">
+      <thead>
+        <tr>
+          <th>Parceiro</th>
+          <th>Categoria</th>
+          <th>Cashback</th>
+          <th>Destaque</th>
+          <th *ngIf="auth.ehAdmin"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let parceiro of parceiros">
+          <td>
+            <span class="nome-parceiro">{{ parceiro.nome }}</span>
+            <span class="descricao-parceiro">{{ parceiro.descricao }}</span>
+          </td>
+          <td>{{ parceiro.categoria }}</td>
+          <td><span class="etiqueta percentual">{{ parceiro.percentualCashback }}%</span></td>
+          <td>{{ parceiro.destaque ? 'Sim' : '—' }}</td>
+          <td *ngIf="auth.ehAdmin" class="acoes">
+            <button type="button" class="btn-neutro btn-pequeno" (click)="editar(parceiro)">Editar</button>
+            <button type="button" class="btn-perigo btn-pequeno" (click)="removerParceiro(parceiro.id)">Remover</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="apoio" *ngIf="!carregando && parceiros.length === 0">Nenhum parceiro cadastrado.</p>
+  </div>
+
+  <div class="fundo-modal" *ngIf="emEdicao as p">
+    <div class="modal">
+      <h2>Editar parceiro</h2>
+      <form (ngSubmit)="salvarEdicao()" #edicaoForm="ngForm" class="formulario">
+        <label>
+          Nome
+          <input type="text" name="editNome" [(ngModel)]="p.nome" required>
+        </label>
+        <label>
+          Categoria
+          <input type="text" name="editCategoria" [(ngModel)]="p.categoria" required>
+        </label>
+        <label class="largura-total">
+          Descrição
+          <input type="text" name="editDescricao" [(ngModel)]="p.descricao" required>
+        </label>
+        <label>
+          Selo exibido no app
+          <input type="text" name="editBadge" [(ngModel)]="p.badge" required>
+        </label>
+        <label>
+          Cashback (%)
+          <input type="number" name="editPercentual" step="0.01" min="0" max="100"
+                 [(ngModel)]="p.percentualCashback" required>
+        </label>
+        <label class="linha-checkbox largura-total">
+          <span>Exibir em destaque</span>
+          <input type="checkbox" name="editDestaque" [(ngModel)]="p.destaque">
+        </label>
+        <div class="acoes-modal largura-total">
+          <button type="submit" class="btn-primario" [disabled]="edicaoForm.invalid">Salvar</button>
+          <button type="button" class="btn-neutro" (click)="cancelarEdicao()">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </section>

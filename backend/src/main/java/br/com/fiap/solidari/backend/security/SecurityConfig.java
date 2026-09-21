@@ -59,13 +59,14 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/", "/index",
                                 "/api/auth/**",
-                                "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html",
-                                "/h2-console/**"
+                                "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html"
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/parceiros/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/parceiros/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/parceiros/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/parceiros/**").hasRole("ADMIN")
+                        .requestMatchers("/api/transacoes/processar-cashback").hasRole("ADMIN")
+                        .requestMatchers("/api/alertas/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .headers(headers -> headers.frameOptions(frame -> frame.disable()))

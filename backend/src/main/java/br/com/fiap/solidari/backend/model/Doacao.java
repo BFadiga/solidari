@@ -1,5 +1,6 @@
 package br.com.fiap.solidari.backend.model;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
@@ -30,8 +31,8 @@ public class Doacao {
     @JoinColumn(name = "parceiro_id")
     private Parceiro parceiro;
 
-    @Column(nullable = false)
-    private Double valor;
+    @Column(nullable = false, precision = 10, scale = 2)
+    private BigDecimal valor;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -64,11 +65,11 @@ public class Doacao {
         this.parceiro = parceiro;
     }
 
-    public Double getValor() {
+    public BigDecimal getValor() {
         return valor;
     }
 
-    public void setValor(Double valor) {
+    public void setValor(BigDecimal valor) {
         this.valor = valor;
     }
 
