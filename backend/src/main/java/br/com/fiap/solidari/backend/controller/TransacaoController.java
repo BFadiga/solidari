@@ -54,7 +54,7 @@ public class TransacaoController {
     }
 
     @PostMapping("/processar-cashback")
-    @Operation(summary = "Executa a procedure sp_processar_cashback e credita as transações pendentes (ADMIN)")
+    @Operation(summary = "Executa pkg_cashback.sp_processar_cashback e credita as transações pendentes (ADMIN)")
     public CashbackResponse processarCashback() {
         return transacaoService.processarCashback();
     }

@@ -1,0 +1,14 @@
+flowchart TB
+  A["App Android<br/>(Kotlin + Compose)"] -->|REST + JWT| B["API Spring Boot (Java 17)"]
+  C["Painel admin<br/>(Angular)"] -->|REST + JWT| B
+  subgraph D ["Oracle Database"]
+    P1["pkg_carteira"]
+    P2["pkg_cashback"]
+    P3["pkg_monitoramento"]
+    P4["pkg_relatorios<br/>(Dynamic SQL)"]
+    P5["pkg_util"]
+    T["3 triggers"]
+  end
+  B -->|JDBC| P1 & P2 & P3 & P4
+  P1 & P2 & P3 & P4 -.-> P5
+  P1 & P2 -.-> T

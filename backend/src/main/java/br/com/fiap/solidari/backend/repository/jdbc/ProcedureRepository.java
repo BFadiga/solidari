@@ -10,6 +10,13 @@ import org.springframework.stereotype.Repository;
 
 import br.com.fiap.solidari.backend.model.CategoriaImpacto;
 
+/**
+ * Operacoes que alteram dados, executadas pelas procedures dos packages
+ * {@code pkg_carteira}, {@code pkg_cashback} e {@code pkg_monitoramento}.
+ *
+ * <p>As procedures nao fazem COMMIT: a transacao e a do Spring, que envolve a
+ * chamada. Por isso a mesma conexao do {@link JdbcTemplate} e usada.
+ */
 @Repository
 public class ProcedureRepository {
 
@@ -22,29 +29,31 @@ public class ProcedureRepository {
     public Long registrarDoacao(Long usuarioId, Long parceiroId, BigDecimal valor, CategoriaImpacto categoria) {
         try {
             return jdbcTemplate.execute((java.sql.Connection conexao) -> {
-                try (CallableStatement cs = conexao.prepareCall("{call sp_registrar_doacao(?, ?, ?, ?, ?)}")) {
+                try (CallableStatement cs = conexao.prepareCall(
+                        "{call pkg_carteira.sp_registrar_doacao(?, ?, ?, ?, ?)}")) {
                     cs.setLong(1, usuarioId);
                     if (parceiroId == null) {
-                        cs.setNull(2, Types.BIGINT);
+                        cs.setNull(2, Types.NUMERIC);
                     } else {
                         cs.setLong(2, parceiroId);
                     }
                     cs.setBigDecimal(3, valor);
                     cs.setString(4, categoria.name());
-                    cs.registerOutParameter(5, Types.BIGINT);
+                    cs.registerOutParameter(5, Types.NUMERIC);
                     cs.execute();
                     return cs.getLong(5);
                 }
             });
         } catch (DataAccessException ex) {
-            throw ErroPlpgsql.traduzir(ex);
+            throw ErroPlsql.traduzir(ex);
         }
     }
 
     public ResultadoCashback processarCashback(int limite) {
         try {
             return jdbcTemplate.execute((java.sql.Connection conexao) -> {
-                try (CallableStatement cs = conexao.prepareCall("{call sp_processar_cashback(?, ?, ?, ?)}")) {
+                try (CallableStatement cs = conexao.prepareCall(
+                        "{call pkg_cashback.sp_processar_cashback(?, ?, ?, ?)}")) {
                     cs.setInt(1, limite);
                     cs.registerOutParameter(2, Types.INTEGER);
                     cs.registerOutParameter(3, Types.INTEGER);
@@ -60,21 +69,22 @@ public class ProcedureRepository {
                 }
             });
         } catch (DataAccessException ex) {
-            throw ErroPlpgsql.traduzir(ex);
+            throw ErroPlsql.traduzir(ex);
         }
     }
 
     public int gerarAlertas() {
         try {
             return jdbcTemplate.execute((java.sql.Connection conexao) -> {
-                try (CallableStatement cs = conexao.prepareCall("{call sp_gerar_alertas(?)}")) {
+                try (CallableStatement cs = conexao.prepareCall(
+                        "{call pkg_monitoramento.sp_gerar_alertas(?)}")) {
                     cs.registerOutParameter(1, Types.INTEGER);
                     cs.execute();
                     return cs.getInt(1);
                 }
             });
         } catch (DataAccessException ex) {
-            throw ErroPlpgsql.traduzir(ex);
+            throw ErroPlsql.traduzir(ex);
         }
     }
 

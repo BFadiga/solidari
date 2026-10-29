@@ -3,11 +3,14 @@ package br.com.fiap.solidari.backend.model;
 import java.math.BigDecimal;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+
+import org.hibernate.type.NumericBooleanConverter;
 
 @Entity
 @Table(name = "parceiros")
@@ -35,6 +38,8 @@ public class Parceiro {
     @Column(name = "imagem_url")
     private String imagemUrl;
 
+    // NUMBER(1) no Oracle (0/1): compativel com 19c, que nao tem BOOLEAN em coluna.
+    @Convert(converter = NumericBooleanConverter.class)
     @Column(nullable = false)
     private Boolean destaque = false;
 
@@ -42,6 +47,8 @@ public class Parceiro {
 
     private Double longitude;
 
+    // NUMBER(1) no Oracle (0/1): compativel com 19c, que nao tem BOOLEAN em coluna.
+    @Convert(converter = NumericBooleanConverter.class)
     @Column(nullable = false)
     private Boolean ativo = true;
 

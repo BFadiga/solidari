@@ -6,7 +6,7 @@ plugins {
 
 group = "br.com.fiap.solidari"
 version = "0.0.1-SNAPSHOT"
-description = "API REST do Solidari - Back-end Spring Boot com persistencia PostgreSQL e PL/pgSQL"
+description = "API REST do Solidari - Back-end Spring Boot com persistencia Oracle e PL/SQL"
 
 java {
     toolchain {
@@ -26,8 +26,8 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
 
     implementation("org.flywaydb:flyway-core")
-    runtimeOnly("org.flywaydb:flyway-database-postgresql")
-    runtimeOnly("org.postgresql:postgresql")
+    runtimeOnly("org.flywaydb:flyway-database-oracle")
+    runtimeOnly("com.oracle.database.jdbc:ojdbc11")
 
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0")
 
@@ -37,4 +37,15 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // Os testes de integracao leem a conexao das variaveis SOLIDARI_DB_*,
+    // herdadas do ambiente (no pipeline, apontam para o Oracle do job).
+    testLogging {
+        events("passed", "skipped", "failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
+// Nome fixo do jar executavel: simplifica o Dockerfile e o deploy do pipeline.
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+    archiveFileName.set("solidari-backend.jar")
 }

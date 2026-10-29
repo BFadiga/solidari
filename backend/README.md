@@ -1,38 +1,44 @@
-# Solidari Backend (Fase 2 — Spring Boot)
+# Solidari Backend (Spring Boot + Oracle PL/SQL)
 
-API REST para o app Solidari: cadastro de usuários, parceiros com vantagens de cashback e doações de crédito, com cálculo de impacto (árvores plantadas / refeições servidas), refletindo as telas de Login, Home, Cashback e Localização já existentes no app.
+API REST do Solidari: cadastro de usuários, parceiros com cashback, apuração de
+crédito e doações convertidas em impacto (árvores plantadas / refeições servidas).
+
+As regras de negócio que mexem em dinheiro ficam no banco, em **packages PL/SQL**.
+O Java valida a requisição, cuida da segurança e chama os packages por JDBC.
 
 ## Stack
 
 - Java 17 + Spring Boot 3.3 (Spring MVC + Thymeleaf)
-- Spring Data JPA + H2 (arquivo local, sem infraestrutura externa)
+- Oracle Database 19c ou superior (Oracle Database Free 23ai em Docker para desenvolvimento)
+- Flyway para versionar schema, carga simulada, packages e triggers
+- Spring Data JPA (leituras simples) + JDBC (chamada dos packages)
 - Spring Security + JWT (autenticação stateless)
-- Bean Validation (`jakarta.validation`)
 - springdoc-openapi (Swagger UI)
-
-**Por que H2 em vez de Firebase?** O enunciado cita Firebase apenas como exemplo. Como o conteúdo estudado na Fase 1 foi Spring Data JPA, e o objetivo aqui é o mínimo necessário para uma API REST funcional com CRUD, um banco relacional (H2, arquivo local) é suficiente e evita a complexidade extra de configurar credenciais/SDK do Firestore.
 
 ## Como rodar
 
-Da raiz do repositório (usa o wrapper Gradle já existente no projeto Android):
-
 ```bash
+docker compose up -d oracle        # na raiz do repositório
 ./gradlew :backend:bootRun
 ```
 
-A API sobe em `http://localhost:8080`.
+A API sobe em `http://localhost:8080` (Swagger em `/swagger-ui.html`). Na primeira
+execução o Flyway aplica as migrações `V1` a `V7`.
 
-- Página inicial: `http://localhost:8080/`
-- Swagger UI: `http://localhost:8080/swagger-ui.html`
-- Console do H2: `http://localhost:8080/h2-console` (JDBC URL: `jdbc:h2:file:./data/solidari`, usuário `sa`, senha em branco)
+Conexão configurável por variáveis de ambiente: `SOLIDARI_DB_HOST`,
+`SOLIDARI_DB_PORT`, `SOLIDARI_DB_SERVICE`, `SOLIDARI_DB_USER`, `SOLIDARI_DB_PASSWORD`.
 
-Um usuário admin (`admin@solidari.com` / `admin123`) e 3 parceiros de exemplo são criados automaticamente na primeira execução (`config/DataSeeder.java`).
+## Objetos do banco
 
-## Autenticação
-
-1. `POST /api/auth/registrar` ou `POST /api/auth/login` retornam um `token` JWT.
-2. Envie o token nas requisições protegidas: header `Authorization: Bearer <token>`.
-3. Rotas de leitura de parceiros e autenticação são públicas; escrita em parceiros exige papel `ADMIN`; doações e dados do usuário exigem estar autenticado.
+| Migração | Conteúdo |
+|---|---|
+| `V1__schema_inicial.sql` | tabelas, constraints, índices e `auditoria_saldo` |
+| `V2__dados_simulados.sql` | carga determinística de parceiros, usuários, compras e doações |
+| `V3__pkg_util.sql` | `pkg_util`: códigos de erro e formatação monetária |
+| `V4__pkg_carteira.sql` | `pkg_carteira`: doação, impacto, extrato e ranking |
+| `V5__pkg_operacoes.sql` | `pkg_cashback` e `pkg_monitoramento`: rotinas em lote |
+| `V6__pkg_relatorios_dynamic_sql.sql` | `pkg_relatorios`: busca e resumo com Dynamic SQL |
+| `V7__triggers.sql` | `trg_auditoria_saldo`, `trg_transacao_status`, `trg_alerta_transacao_erro` |
 
 ## Endpoints principais
 
@@ -42,18 +48,29 @@ Um usuário admin (`admin@solidari.com` / `admin123`) e 3 parceiros de exemplo s
 | POST | `/api/auth/login` | público | Autentica e retorna token |
 | GET | `/api/usuarios/me` | autenticado | Dados do usuário logado |
 | GET | `/api/parceiros` | público | Lista parceiros (filtro `?categoria=`) |
-| GET | `/api/parceiros/{id}` | público | Detalhe de um parceiro |
-| POST | `/api/parceiros` | ADMIN | Cria parceiro |
-| PUT | `/api/parceiros/{id}` | ADMIN | Atualiza parceiro |
-| DELETE | `/api/parceiros/{id}` | ADMIN | Remove parceiro |
-| POST | `/api/doacoes` | autenticado | Doa crédito do saldo do usuário |
-| GET | `/api/doacoes/me` | autenticado | Histórico de doações |
-| GET | `/api/doacoes/impacto` | autenticado | Árvores plantadas / refeições servidas |
+| POST/PUT/DELETE | `/api/parceiros/**` | ADMIN | Manutenção de parceiros |
+| POST | `/api/transacoes` | autenticado | Registra compra em parceiro |
+| POST | `/api/transacoes/processar-cashback` | ADMIN | `pkg_cashback.sp_processar_cashback` |
+| POST | `/api/doacoes` | autenticado | `pkg_carteira.sp_registrar_doacao` |
+| GET | `/api/doacoes/impacto` | autenticado | `pkg_carteira.sp_impacto_usuario` |
+| GET | `/api/doacoes/extrato` | autenticado | `pkg_carteira.fn_extrato_formatado` |
+| GET | `/api/alertas` | ADMIN | Alertas em aberto |
+| POST | `/api/alertas/gerar` | ADMIN | `pkg_monitoramento.sp_gerar_alertas` |
+| GET | `/api/relatorios/transacoes` | ADMIN | `pkg_relatorios.fn_buscar_transacoes` (Dynamic SQL) |
+| GET | `/api/relatorios/resumo` | ADMIN | `pkg_relatorios.fn_resumo_transacoes` (Dynamic SQL) |
 
 ## Testes
 
 ```bash
-./gradlew :backend:test
+./gradlew :backend:test     # requer o Oracle no ar
 ```
 
-Cobrem o fluxo de registro/login e as regras de acesso público x autenticado dos parceiros.
+Os mesmos testes rodam no pipeline `.github/workflows/ci-cd.yml`, contra um Oracle
+criado só para a execução.
+
+## Imagem Docker
+
+```bash
+./gradlew :backend:bootJar
+docker build -t solidari-backend backend
+```
