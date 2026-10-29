@@ -1,8 +1,13 @@
 # Solidari — Fase 7: consolidação em Oracle PL/SQL e entrega contínua
 
-**Atividade:** Cap 1 — Consolidando o Smart HAS (DevOps & DevSecOps)
-**Grupo 41:** Marcos Andrey da Silva — RM: _preencher_
-**Repositório:** https://github.com/BFadiga/solidari
+**Atividade:** Cap 1 — Consolidando o Smart HAS (DevOps & DevSecOps)  
+**Grupo 41**  
+Bruno Martins Fadiga — RM 557433  
+Giovanni Silva Testoni — RM 99960  
+Marcos Andrey da Silva — RM 555047  
+Vinícius Moraes Vianna — RM 555046  
+Vitória Camila dos Santos Candido — RM 556604  
+**Repositório:** https://github.com/BFadiga/solidari  
 **Vídeo de apresentação:** _inserir link do YouTube (não listado)_
 
 ---
