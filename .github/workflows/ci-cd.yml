@@ -15,8 +15,10 @@
 name: CI/CD Solidari
 
 on:
+  # Branches de feature sao testadas pelo pull request; o push so dispara na
+  # master. Assim cada commit roda uma vez so, sem execucoes duplicadas.
   push:
-    branches: [master, "feature/**"]
+    branches: [master]
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -26,8 +28,10 @@ on:
         type: boolean
         default: false
 
+# Um novo push cancela a execucao anterior do MESMO tipo (push, PR ou manual).
+# Tipos diferentes nao se cancelam entre si.
 concurrency:
-  group: ci-cd-${{ github.ref }}
+  group: ci-cd-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:

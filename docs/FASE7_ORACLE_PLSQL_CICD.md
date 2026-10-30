@@ -195,8 +195,9 @@ desfeita junta.
 
 ## 5. Parte 2 — pipeline CI/CD (GitHub Actions)
 
-Arquivo: `.github/workflows/ci-cd.yml`. Roda a cada push na `master` e em branches
-`feature/**`, em pull requests para a `master` e manualmente (*Run workflow*).
+Arquivo: `.github/workflows/ci-cd.yml`. Roda em todo pull request para a `master`
+(a cada novo commit do PR), em todo push na `master` (merge) e manualmente
+(*Run workflow*).
 
 ![Pipeline](img/pipeline-ci-cd.svg)
 
@@ -272,7 +273,7 @@ OCI) apontando para o Oracle de produção. Sem esses secrets, o passo é ignora
 
 | Situação | Ensaio de deploy | Imagem no GHCR | Servidor via SSH |
 |---|---|---|---|
-| Push / PR em `feature/**` | não roda | não | não |
+| Commit num pull request | não roda | não | não |
 | Push (merge) na `master` | **roda** | não | não |
 | Manual, sem marcar `publicar_imagem` | **roda** | não | não |
 | Manual, com `publicar_imagem` | **roda** | **sim** | só se houver os secrets |
