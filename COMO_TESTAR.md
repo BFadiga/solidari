@@ -438,7 +438,14 @@ Os testes usam `@Transactional`, então tudo o que gravam é desfeito ao final �
 dados de exemplo permanecem intactos.
 
 No GitHub, o pipeline `.github/workflows/ci-cd.yml` roda esses mesmos testes a cada
-push, contra um Oracle criado só para a execução (veja a documentação da Fase 7).
+push, contra um Oracle criado só para a execução. Para ver o resultado: aba
+**Actions** do repositório → clique na execução → role até o resumo.
+
+O **ensaio de deploy** (API em container ligada ao Oracle + smoke tests) roda no
+merge para a `master` ou manualmente em **Actions → CI/CD Solidari → Run workflow**.
+O ambiente é temporário e apagado ao fim. Publicar a imagem da API no GitHub
+Container Registry só acontece se você marcar **publicar_imagem** nesse disparo
+manual — detalhes e motivos em `docs/FASE7_ORACLE_PLSQL_CICD.md`, seção 5.3.
 
 ---
 

@@ -207,10 +207,9 @@ Arquivo: `.github/workflows/ci-cd.yml`. Roda a cada push na `master` e em branch
 | **backend** | sempre | sobe um Oracle Database Free como *service container*, compila a API, aplica as 7 migrações Flyway e roda os testes automatizados contra o Oracle real; gera o jar |
 | **admin-web** | sempre | `npm ci`, testes unitários (Karma, Chrome headless) e build de produção do painel |
 | **android** | sempre | testes unitários e APK de debug do app |
-| **deploy** | push na `master` ou manual | sobe a API em container ligada a um Oracle (ambiente de homologação), espera a aplicação responder, roda os smoke tests e publica a imagem no GitHub Container Registry |
+| **deploy** | push na `master` ou manual | sobe a API em container ligada a um Oracle (ambiente de homologação temporário), espera a aplicação responder e roda os smoke tests; publicar a imagem é opcional (seção 5.3) |
 
-O **deploy** só roda se `backend` e `admin-web` passarem. Dentro dele, a imagem só é
-publicada se os smoke tests passarem.
+O **deploy** só roda se `backend` e `admin-web` passarem.
 
 ### 5.2 Build e testes automatizados
 
@@ -229,17 +228,54 @@ Também rodam os testes de controller já existentes (autenticação e parceiros
 
 ### 5.3 Deploy automatizado + integração com o Oracle
 
-1. Baixa o jar gerado no job `backend` e monta a imagem (`backend/Dockerfile`).
+**O que "deploy" significa aqui.** O job sobe a aplicação de verdade, em container,
+ligada a um Oracle, e prova que ela funciona de ponta a ponta. Esse ambiente de
+homologação é **temporário**: roda numa máquina do GitHub e é apagado, com banco e
+API, quando o job termina. Nada fica no ar nem acessível de fora, e não há custo
+(repositório público tem GitHub Actions gratuito).
+
+Passo a passo:
+
+1. Baixa o jar gerado no job `backend` e monta a imagem Docker da API
+   (`backend/Dockerfile`). Imagem é o pacote pronto da aplicação, que qualquer
+   servidor com Docker consegue rodar.
 2. Sobe a API apontando para o Oracle do ambiente; na subida, o Flyway aplica as
    migrações e instala packages e triggers.
 3. Executa `scripts/ci/smoke-test.sh`, que percorre o caminho completo
    REST → Java → JDBC → PL/SQL: catálogo de parceiros, login (certo e errado),
    bloqueio de rota sem token, apuração de cashback, geração de alertas e as duas
    consultas de Dynamic SQL (inclusive a recusa de ordenação inválida).
-4. Publica a imagem em `ghcr.io/bfadiga/solidari-backend` com a tag do commit e `latest`.
-5. **Opcional:** se os secrets `DEPLOY_SSH_*` e `PROD_DB_*` estiverem configurados,
-   atualiza a API num servidor próprio (por exemplo, uma VM na OCI) apontando para o
-   Oracle de produção.
+4. Coleta o log da API e o resultado dos smoke tests (seção 5.4).
+
+**Publicação da imagem (opcional).** A imagem pode ser guardada no GitHub Container
+Registry (`ghcr.io/bfadiga/solidari-backend`), o registro de containers do GitHub,
+para depois ser instalada num servidor. Isso **não** acontece automaticamente,
+por decisão do grupo:
+
+- cada imagem tem cerca de 250 MB e fica na conta dona do repositório (aba
+  *Packages* do perfil);
+- pacotes privados consomem a cota gratuita de armazenamento da conta, que é
+  pequena; publicar a cada merge esgotaria essa cota sem necessidade;
+- o requisito da atividade (deploy automatizado integrado ao Oracle) já é provado
+  pelo ensaio dos passos 1 a 4.
+
+Para publicar, dispare o pipeline manualmente (aba **Actions → CI/CD Solidari →
+Run workflow**) e marque **publicar_imagem**. A imagem recebe a tag do commit e
+`latest`. Para remover depois: página do pacote → *Package settings* → *Delete*.
+A imagem não contém credenciais: a conexão com o banco e a chave JWT são passadas
+por variável de ambiente na hora de rodar.
+
+**Deploy em servidor (opcional, desligado).** Se o repositório tiver os secrets
+`DEPLOY_SSH_*` e `PROD_DB_*` (seção 5.5) e a imagem for publicada na mesma
+execução, o pipeline atualiza a API num servidor próprio (por exemplo, uma VM na
+OCI) apontando para o Oracle de produção. Sem esses secrets, o passo é ignorado.
+
+| Situação | Ensaio de deploy | Imagem no GHCR | Servidor via SSH |
+|---|---|---|---|
+| Push / PR em `feature/**` | não roda | não | não |
+| Push (merge) na `master` | **roda** | não | não |
+| Manual, sem marcar `publicar_imagem` | **roda** | não | não |
+| Manual, com `publicar_imagem` | **roda** | **sim** | só se houver os secrets |
 
 ### 5.4 Logs e relatórios de execução
 
@@ -257,7 +293,7 @@ das migrações — erro de compilação no banco não passa despercebido.
 | Secret | Obrigatório | Uso |
 |---|---|---|
 | `SOLIDARI_JWT_SECRET` | não | chave JWT da API em homologação (há valor padrão de CI) |
-| `DEPLOY_SSH_HOST`, `DEPLOY_SSH_USER`, `DEPLOY_SSH_KEY` | não | ativam o deploy no servidor |
+| `DEPLOY_SSH_HOST`, `DEPLOY_SSH_USER`, `DEPLOY_SSH_KEY` | não | ativam o deploy no servidor (exige `publicar_imagem`) |
 | `PROD_DB_HOST`, `PROD_DB_PORT`, `PROD_DB_SERVICE`, `PROD_DB_USER`, `PROD_DB_PASSWORD` | não | conexão do Oracle de produção |
 
 A senha do Oracle do pipeline é de um banco descartável, criado e destruído em cada

@@ -4,9 +4,10 @@
 #   1. backend      build + testes automatizados contra um Oracle real
 #   2. admin-web    build do painel Angular
 #   3. android      build do app e testes unitarios
-#   4. deploy       sobe a API em container ligada ao Oracle (homologacao),
-#                   roda smoke tests e publica a imagem no GitHub Container
-#                   Registry. Opcional: deploy em servidor proprio via SSH.
+#   4. deploy       sobe a API em container ligada ao Oracle (homologacao
+#                   temporaria, apagada ao fim do job) e roda smoke tests.
+#                   Publicar a imagem no GitHub Container Registry e o deploy
+#                   em servidor proprio via SSH sao OPCIONAIS (ver abaixo).
 #
 # Logs e relatorios ficam em tres lugares: no resumo da execucao (aba Summary),
 # nos artefatos baixaveis de cada job e no relatorio de testes (aba Checks).
@@ -19,6 +20,11 @@ on:
   pull_request:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      publicar_imagem:
+        description: "Publicar a imagem da API no GitHub Container Registry (ocupa espaço na conta dona do repositório)"
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-cd-${{ github.ref }}
@@ -206,8 +212,13 @@ jobs:
   #
   # Roda em push na master ou manualmente (workflow_dispatch). A API sobe em
   # container, conecta no Oracle do ambiente de homologacao, aplica as
-  # migracoes Flyway na subida e passa pelos smoke tests. So depois disso a
-  # imagem e publicada.
+  # migracoes Flyway na subida e passa pelos smoke tests. O ambiente e
+  # temporario: tudo e apagado quando o job termina.
+  #
+  # A imagem so e publicada no GitHub Container Registry quando o pipeline e
+  # disparado manualmente com "publicar_imagem" marcado. Cada imagem tem ~250 MB
+  # e ocupa a cota de armazenamento da conta dona do repositorio; publicar a
+  # cada merge esgotaria a cota gratuita sem necessidade.
   # ---------------------------------------------------------------------------
   deploy:
     name: Deploy — API + Oracle (homologação)
@@ -275,6 +286,11 @@ jobs:
 
       - name: Smoke tests
         run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.publicar_imagem }}" == "true" ]]; then
+            echo "PUBLICACAO=imagem será publicada no GHCR" >> "$GITHUB_ENV"
+          else
+            echo "PUBLICACAO=imagem NÃO publicada (ensaio de deploy apenas)" >> "$GITHUB_ENV"
+          fi
           mkdir -p relatorios
           scripts/ci/smoke-test.sh http://localhost:8080 relatorios/smoke-test.md
 
@@ -290,7 +306,7 @@ jobs:
             echo "## Deploy em homologação"
             echo
             echo "- Commit: \`${GITHUB_SHA::7}\`"
-            echo "- Imagem: \`${IMAGEM:-n/d}:${GITHUB_SHA::7}\`"
+            echo "- Imagem: \`${IMAGEM:-n/d}:${GITHUB_SHA::7}\` (${PUBLICACAO:-n/d})"
             echo
             echo "### Smoke tests"
             cat relatorios/smoke-test.md 2>/dev/null || echo "Smoke tests não executados."
@@ -309,7 +325,8 @@ jobs:
           path: relatorios/
           retention-days: 30
 
-      - name: Publicar imagem no GitHub Container Registry
+      - name: Publicar imagem no GitHub Container Registry (opcional)
+        if: github.event_name == 'workflow_dispatch' && inputs.publicar_imagem
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker push "$IMAGEM:${GITHUB_SHA::7}"
@@ -317,10 +334,11 @@ jobs:
           echo "Imagem publicada: \`$IMAGEM:${GITHUB_SHA::7}\`" >> "$GITHUB_STEP_SUMMARY"
 
       # Opcional: atualiza a API num servidor proprio (ex.: VM na OCI) que
-      # aponta para o Oracle de producao. Configure os secrets DEPLOY_SSH_HOST,
-      # DEPLOY_SSH_USER, DEPLOY_SSH_KEY e PROD_DB_* para ativar.
+      # aponta para o Oracle de producao. Precisa da imagem publicada (o servidor
+      # baixa do GHCR) e dos secrets DEPLOY_SSH_HOST, DEPLOY_SSH_USER,
+      # DEPLOY_SSH_KEY e PROD_DB_*.
       - name: Deploy no servidor (opcional)
-        if: env.DEPLOY_SSH_HOST != ''
+        if: env.DEPLOY_SSH_HOST != '' && github.event_name == 'workflow_dispatch' && inputs.publicar_imagem
         uses: appleboy/ssh-action@v1.2.0
         env:
           IMAGEM_DEPLOY: ${{ env.IMAGEM }}:latest
