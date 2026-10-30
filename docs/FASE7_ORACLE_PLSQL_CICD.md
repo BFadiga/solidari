@@ -327,10 +327,3 @@ banco, está em `COMO_TESTAR.md`.
 | Build e testes automatizados | jobs `backend`, `admin-web` e `android` |
 | Deploy automatizado do back-end + integração com Oracle | job `deploy` |
 | Logs e relatórios de execução | Summary, Checks e artefatos (seção 5.4) |
-
----
-
-## 8. Evidências da execução
-
-_Inserir aqui prints da aba Actions: a execução com os quatro jobs verdes, o
-relatório do banco no Summary e a tabela de smoke tests do deploy._
