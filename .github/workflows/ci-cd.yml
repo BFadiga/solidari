@@ -1,0 +1,368 @@
+# =============================================================================
+# Solidari — pipeline de CI/CD
+#
+#   1. backend      build + testes automatizados contra um Oracle real
+#   2. admin-web    build do painel Angular
+#   3. android      build do app e testes unitarios
+#   4. deploy       sobe a API em container ligada ao Oracle (homologacao
+#                   temporaria, apagada ao fim do job) e roda smoke tests.
+#                   Publicar a imagem no GitHub Container Registry e o deploy
+#                   em servidor proprio via SSH sao OPCIONAIS (ver abaixo).
+#
+# Logs e relatorios ficam em tres lugares: no resumo da execucao (aba Summary),
+# nos artefatos baixaveis de cada job e no relatorio de testes (aba Checks).
+# =============================================================================
+name: CI/CD Solidari
+
+on:
+  # Branches de feature sao testadas pelo pull request; o push so dispara na
+  # master. Assim cada commit roda uma vez so, sem execucoes duplicadas.
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      publicar_imagem:
+        description: "Publicar a imagem da API no GitHub Container Registry (ocupa espaço na conta dona do repositório)"
+        type: boolean
+        default: false
+
+# Um novo push cancela a execucao anterior do MESMO tipo (push, PR ou manual).
+# Tipos diferentes nao se cancelam entre si.
+concurrency:
+  group: ci-cd-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "17"
+  ORACLE_IMAGE: gvenzl/oracle-free:23-slim-faststart
+  # Banco efemero do runner, destruido ao fim de cada job: nao e credencial real.
+  SOLIDARI_DB_HOST: localhost
+  SOLIDARI_DB_PORT: "1521"
+  SOLIDARI_DB_SERVICE: FREEPDB1
+  SOLIDARI_DB_USER: solidari
+  SOLIDARI_DB_PASSWORD: solidari
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Back-end: compila, aplica as migracoes no Oracle e roda os testes
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Back-end — build e testes (Oracle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      checks: write
+    services:
+      oracle:
+        image: gvenzl/oracle-free:23-slim-faststart
+        env:
+          ORACLE_PASSWORD: CiOracle2026
+          APP_USER: solidari
+          APP_USER_PASSWORD: solidari
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Gradle (com cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build e testes automatizados
+        run: |
+          mkdir -p relatorios
+          set -o pipefail
+          ./gradlew :backend:build --no-daemon --console=plain 2>&1 | tee relatorios/build-backend.log
+
+      - name: Relatório do banco (migrações e objetos PL/SQL)
+        if: always()
+        run: |
+          docker exec -i ${{ job.services.oracle.id }} \
+            sqlplus -s solidari/solidari@//localhost:1521/FREEPDB1 \
+            < scripts/ci/relatorio-banco.sql | tee relatorios/relatorio-banco.txt
+
+          {
+            echo "## Banco Oracle após as migrações"
+            echo '```'
+            cat relatorios/relatorio-banco.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if ! grep -q "OBJETOS_INVALIDOS=0" relatorios/relatorio-banco.txt; then
+            echo "::error::Há objetos PL/SQL inválidos no banco"
+            exit 1
+          fi
+
+      - name: Relatório de testes (aba Checks)
+        if: always()
+        uses: mikepenz/action-junit-report@v4
+        with:
+          report_paths: backend/build/test-results/test/*.xml
+          check_name: Testes do back-end
+          detailed_summary: true
+          include_passed: true
+
+      - name: Publicar relatórios e logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorios-backend
+          path: |
+            relatorios/
+            backend/build/reports/tests/test/
+            backend/build/test-results/test/
+          retention-days: 30
+
+      - name: Publicar jar da API
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidari-backend-jar
+          path: backend/build/libs/solidari-backend.jar
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 2. Painel administrativo (Angular)
+  # ---------------------------------------------------------------------------
+  admin-web:
+    name: Painel admin — build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: admin-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: admin-web/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      - name: Testes unitários
+        run: npx ng test --watch=false --browsers=ChromeHeadless
+
+      - name: Build de produção
+        run: npx ng build 2>&1 | tee build-admin-web.log
+
+      - name: Publicar build
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-web-dist
+          path: |
+            admin-web/dist/
+            admin-web/build-admin-web.log
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 3. App Android
+  # ---------------------------------------------------------------------------
+  android:
+    name: App Android — build e testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Gradle (com cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Testes unitários e APK de debug
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --console=plain \
+            2>&1 | tee build-android.log
+
+      - name: Publicar APK e relatórios
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-app
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/reports/tests/
+            build-android.log
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 4. Deploy automatizado da API integrada ao Oracle
+  #
+  # Roda em push na master ou manualmente (workflow_dispatch). A API sobe em
+  # container, conecta no Oracle do ambiente de homologacao, aplica as
+  # migracoes Flyway na subida e passa pelos smoke tests. O ambiente e
+  # temporario: tudo e apagado quando o job termina.
+  #
+  # A imagem so e publicada no GitHub Container Registry quando o pipeline e
+  # disparado manualmente com "publicar_imagem" marcado. Cada imagem tem ~250 MB
+  # e ocupa a cota de armazenamento da conta dona do repositorio; publicar a
+  # cada merge esgotaria a cota gratuita sem necessidade.
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy — API + Oracle (homologação)
+    needs: [backend, admin-web]
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: homologacao
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # Deploy remoto opcional: so roda se estes secrets existirem no repositorio.
+      DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+    services:
+      oracle:
+        image: gvenzl/oracle-free:23-slim-faststart
+        env:
+          ORACLE_PASSWORD: CiOracle2026
+          APP_USER: solidari
+          APP_USER_PASSWORD: solidari
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Baixar jar gerado no build
+        uses: actions/download-artifact@v4
+        with:
+          name: solidari-backend-jar
+          path: backend/build/libs
+
+      - name: Montar imagem Docker da API
+        run: |
+          IMAGEM="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/solidari-backend"
+          echo "IMAGEM=$IMAGEM" >> "$GITHUB_ENV"
+          docker build -t "$IMAGEM:${GITHUB_SHA::7}" -t "$IMAGEM:latest" backend
+
+      - name: Subir a API ligada ao Oracle
+        run: |
+          docker run -d --name solidari-api --network host \
+            -e SOLIDARI_DB_HOST -e SOLIDARI_DB_PORT -e SOLIDARI_DB_SERVICE \
+            -e SOLIDARI_DB_USER -e SOLIDARI_DB_PASSWORD \
+            -e SOLIDARI_JWT_SECRET="${{ secrets.SOLIDARI_JWT_SECRET || 'homologacao-chave-ci-0123456789abcdef0123' }}" \
+            "$IMAGEM:${GITHUB_SHA::7}"
+
+          echo "Aguardando a API responder..."
+          for tentativa in $(seq 1 60); do
+            if curl -sf http://localhost:8080/api/parceiros > /dev/null; then
+              echo "API no ar após $((tentativa * 3))s"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::A API não subiu a tempo"
+          docker logs solidari-api
+          exit 1
+
+      - name: Smoke tests
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.publicar_imagem }}" == "true" ]]; then
+            echo "PUBLICACAO=imagem será publicada no GHCR" >> "$GITHUB_ENV"
+          else
+            echo "PUBLICACAO=imagem NÃO publicada (ensaio de deploy apenas)" >> "$GITHUB_ENV"
+          fi
+          mkdir -p relatorios
+          scripts/ci/smoke-test.sh http://localhost:8080 relatorios/smoke-test.md
+
+      - name: Coletar logs e relatório do deploy
+        if: always()
+        run: |
+          mkdir -p relatorios
+          docker logs solidari-api > relatorios/api.log 2>&1 || true
+          grep -iE "flyway|migrat|Started SolidariBackendApplication" relatorios/api.log \
+            > relatorios/flyway-e-inicializacao.log || true
+
+          {
+            echo "## Deploy em homologação"
+            echo
+            echo "- Commit: \`${GITHUB_SHA::7}\`"
+            echo "- Imagem: \`${IMAGEM:-n/d}:${GITHUB_SHA::7}\` (${PUBLICACAO:-n/d})"
+            echo
+            echo "### Smoke tests"
+            cat relatorios/smoke-test.md 2>/dev/null || echo "Smoke tests não executados."
+            echo
+            echo "### Migrações e inicialização"
+            echo '```'
+            cat relatorios/flyway-e-inicializacao.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publicar logs do deploy
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorio-deploy
+          path: relatorios/
+          retention-days: 30
+
+      - name: Publicar imagem no GitHub Container Registry (opcional)
+        if: github.event_name == 'workflow_dispatch' && inputs.publicar_imagem
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "$IMAGEM:${GITHUB_SHA::7}"
+          docker push "$IMAGEM:latest"
+          echo "Imagem publicada: \`$IMAGEM:${GITHUB_SHA::7}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # Opcional: atualiza a API num servidor proprio (ex.: VM na OCI) que
+      # aponta para o Oracle de producao. Precisa da imagem publicada (o servidor
+      # baixa do GHCR) e dos secrets DEPLOY_SSH_HOST, DEPLOY_SSH_USER,
+      # DEPLOY_SSH_KEY e PROD_DB_*.
+      - name: Deploy no servidor (opcional)
+        if: env.DEPLOY_SSH_HOST != '' && github.event_name == 'workflow_dispatch' && inputs.publicar_imagem
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          IMAGEM_DEPLOY: ${{ env.IMAGEM }}:latest
+          PROD_DB_HOST: ${{ secrets.PROD_DB_HOST }}
+          PROD_DB_PORT: ${{ secrets.PROD_DB_PORT }}
+          PROD_DB_SERVICE: ${{ secrets.PROD_DB_SERVICE }}
+          PROD_DB_USER: ${{ secrets.PROD_DB_USER }}
+          PROD_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          PROD_JWT_SECRET: ${{ secrets.SOLIDARI_JWT_SECRET }}
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: IMAGEM_DEPLOY,PROD_DB_HOST,PROD_DB_PORT,PROD_DB_SERVICE,PROD_DB_USER,PROD_DB_PASSWORD,PROD_JWT_SECRET
+          script: |
+            docker pull "$IMAGEM_DEPLOY"
+            docker rm -f solidari-api 2>/dev/null || true
+            docker run -d --name solidari-api --restart unless-stopped -p 8080:8080 \
+              -e SOLIDARI_DB_HOST="$PROD_DB_HOST" -e SOLIDARI_DB_PORT="${PROD_DB_PORT:-1521}" \
+              -e SOLIDARI_DB_SERVICE="$PROD_DB_SERVICE" -e SOLIDARI_DB_USER="$PROD_DB_USER" \
+              -e SOLIDARI_DB_PASSWORD="$PROD_DB_PASSWORD" -e SOLIDARI_JWT_SECRET="$PROD_JWT_SECRET" \
+              "$IMAGEM_DEPLOY"
+            docker ps --filter name=solidari-api

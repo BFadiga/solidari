@@ -17,9 +17,9 @@ O Solidari transforma consumo em doação. O ciclo tem quatro etapas:
 | 3 | O administrador apura o cashback em lote | Painel web |
 | 4 | O crédito vira doação, que vira árvore ou refeição | App Android |
 
-As regras que sustentam esse ciclo não estão no Java nem no front: são funções e
-procedures **PL/pgSQL rodando dentro do PostgreSQL**. O back-end Spring Boot as
-aciona por JDBC.
+As regras que sustentam esse ciclo não estão no Java nem no front: são **packages
+PL/SQL rodando dentro do Oracle**, mais três triggers de auditoria e automação. O
+back-end Spring Boot aciona os packages por JDBC.
 
 O roteiro da seção 5 percorre as quatro etapas de ponta a ponta.
 
@@ -32,7 +32,7 @@ O roteiro da seção 5 percorre as quatro etapas de ponta a ponta.
 | Software | Versão | Verificar com |
 |---|---|---|
 | JDK | 17 ou 21 | `java -version` |
-| PostgreSQL | 14 ou superior | `psql --version` |
+| Docker | 24 ou superior | `docker --version` |
 | Node.js | 18 ou superior | `node --version` |
 | Android Studio | Ladybug ou superior | — |
 
@@ -54,28 +54,27 @@ export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
 Não é preciso instalar Gradle nem Angular CLI: o projeto usa o wrapper (`./gradlew`)
 e o CLI local do npm.
 
-### 2.2 Banco de dados
+### 2.2 Banco de dados (Oracle)
 
-Suba o PostgreSQL. No macOS com Homebrew:
-
-```bash
-brew install postgresql@17
-brew services start postgresql@17
-```
-
-Crie o usuário e o banco:
+O jeito mais simples é o **Oracle Database Free** em Docker, já descrito no
+`docker-compose.yml` da raiz:
 
 ```bash
-psql postgres -c "CREATE ROLE solidari WITH LOGIN PASSWORD 'solidari';"
-psql postgres -c "CREATE DATABASE solidari OWNER solidari;"
+docker compose up -d oracle
 ```
+
+Na primeira vez o download da imagem leva alguns minutos. O banco está pronto quando
+`docker compose ps` mostra o serviço como `healthy`. O usuário de aplicação
+(`solidari` / `solidari`, serviço `FREEPDB1`) é criado automaticamente.
 
 **Não crie tabela nenhuma.** Na primeira vez que a API sobe, o Flyway cria o schema,
-carrega os dados de exemplo e instala as funções e procedures.
+carrega os dados de exemplo e instala os packages e as triggers.
 
-> Se o seu PostgreSQL não estiver na porta 5432, informe a porta ao subir a API:
-> `SOLIDARI_DB_PORT=5433 ./gradlew :backend:bootRun`.
-> Valem também `SOLIDARI_DB_HOST` e `SOLIDARI_DB_NAME`.
+> **Preferindo o Oracle da FIAP?** Aponte a API para ele com variáveis de ambiente:
+> `SOLIDARI_DB_HOST=oracle.fiap.com.br SOLIDARI_DB_SERVICE=ORCL
+> SOLIDARI_DB_USER=rmXXXXX SOLIDARI_DB_PASSWORD=<sua senha> ./gradlew :backend:bootRun`.
+> Valem também `SOLIDARI_DB_PORT` (padrão 1521). Confira host e serviço no material
+> da disciplina. O schema é compatível com Oracle 19c ou superior.
 
 ### 2.3 API
 
@@ -88,8 +87,8 @@ Na raiz do repositório:
 Espere estas duas linhas no log:
 
 ```
-Successfully applied 4 migrations to schema "public", now at version v4
-Started SolidariBackendApplication in 1.7 seconds
+Successfully applied 7 migrations to schema "SOLIDARI", now at version v7
+Started SolidariBackendApplication in X.X seconds
 ```
 
 A API fica em `http://localhost:8080` e a documentação interativa em
@@ -156,7 +155,7 @@ Toque em **Cashback** na barra inferior.
 
 - **Saldo disponível** — crédito acumulado e ainda não doado.
 - **Impacto da Solidariedade** — árvores e refeições. Esses números **não** são
-  calculados no app nem no Java: vêm da função `fn_impacto_usuario`.
+  calculados no app nem no Java: vêm de `pkg_carteira.sp_impacto_usuario`.
 - **Vantagens dos Parceiros** — os doze parceiros vindos da API, com o percentual de
   cada um. Os chips de categoria filtram a lista; toque no mesmo chip de novo para
   desmarcar.
@@ -170,13 +169,14 @@ Toque em **Doar Crédito**.
    uma árvore.
 2. Abra o diálogo de novo e tente doar um valor **maior que o saldo**. O botão
    *Confirmar* fica desabilitado, e mesmo que você force, a resposta do servidor é a
-   mensagem levantada pelo `RAISE EXCEPTION` do PL/pgSQL:
+   mensagem levantada pelo `RAISE_APPLICATION_ERROR` do package PL/SQL:
 
    > Saldo insuficiente: disponível R$ 65,41, solicitado R$ 99.999,00
 
 A doação percorre o caminho completo: toque no app → `POST /api/doacoes` → Java →
-JDBC → procedure `sp_registrar_doacao`, que valida o saldo, debita e grava numa
-única operação atômica.
+JDBC → `pkg_carteira.sp_registrar_doacao`, que valida o saldo, debita e grava numa
+única operação atômica. O débito dispara a trigger `trg_auditoria_saldo`, que
+registra a operação em `auditoria_saldo`.
 
 ### 3.4 Aba Localização
 
@@ -198,9 +198,9 @@ Aqui ficam as ações de conta:
   mostra quanto voltará. A compra entra como *Aguardando*: o crédito só existe
   depois que o administrador apurar.
 - **Extrato de doações** — mostra sua posição no ranking (calculada por
-  `fn_ranking_doador`) e expande para o texto produzido por `fn_extrato_formatado`.
-  Os valores em `R$ 1.234,56` e as datas em `DD/MM/AAAA` são formatados **dentro do
-  PostgreSQL**, não pelo app.
+  `pkg_carteira.fn_ranking_doador`) e expande para o texto produzido por
+  `pkg_carteira.fn_extrato_formatado`. Os valores em `R$ 1.234,56` e as datas em
+  `DD/MM/AAAA` são formatados **dentro do Oracle**, não pelo app.
 - **Minhas compras** — histórico com o cashback creditado em cada uma.
 
 ---
@@ -226,14 +226,15 @@ O resultado aparece na tela:
 
 > 21 compras creditadas · R$ 358,18 distribuídos
 
-Isso executa a procedure `sp_processar_cashback`, que percorre as compras pendentes
+Isso executa `pkg_cashback.sp_processar_cashback`, que percorre as compras pendentes
 com um cursor, calcula o crédito pelo percentual de cada parceiro e soma ao saldo do
-participante. Se uma compra falhar, ela é marcada como erro e o lote continua.
+participante. Se uma compra falhar, ela volta ao `SAVEPOINT` do item, é marcada como
+erro e o lote continua; a trigger `trg_alerta_transacao_erro` abre um alerta na hora.
 
 ### 4.3 Verificar pendências
 
-Clique em *Verificar agora*. A procedure `sp_gerar_alertas` varre o sistema e
-registra o que precisa de atenção:
+Clique em *Verificar agora*. `pkg_monitoramento.sp_gerar_alertas` varre o sistema
+e registra o que precisa de atenção (sem duplicar alertas que ainda estão abertos):
 
 - crédito parado (participante com saldo relevante sem doar há mais de 60 dias);
 - parceiro sem movimento nos últimos 45 dias;
@@ -286,63 +287,86 @@ exatamente esse valor. Vinte por cento de R$ 150,00.
 Aba *Cashback* → *Doar Crédito* → R$ 30,00 em *Restauração ambiental*. O saldo cai,
 e o contador de árvores sobe em três — porque cada R$ 10 plantam uma.
 
-O crédito que nasceu de uma compra virou impacto, e cada etapa passou por uma rotina
-PL/pgSQL diferente.
+O crédito que nasceu de uma compra virou impacto, e cada etapa passou por um package
+PL/SQL diferente.
 
 ---
 
-## 6. Onde cada rotina do banco entra
+## 6. Onde cada objeto do banco entra
 
-| Rotina | Tipo | Acionada por |
+| Objeto | Tipo | Acionado por |
 |---|---|---|
-| `fn_impacto_usuario` | function | Cashback e Perfil no app, Carteira no painel |
-| `fn_extrato_formatado` | function | *Extrato de doações*, em Opções |
-| `fn_ranking_doador` | function | posição exibida junto ao extrato |
-| `fn_moeda_br` | function | formatação usada pelas demais |
-| `sp_registrar_doacao` | procedure | botão *Doar Crédito* |
-| `sp_processar_cashback` | procedure | botão *Apurar agora*, no painel |
-| `sp_gerar_alertas` | procedure | botão *Verificar agora*, no painel |
+| `pkg_carteira.sp_impacto_usuario` | procedure | Cashback e Perfil no app, Carteira no painel |
+| `pkg_carteira.fn_extrato_formatado` | function | *Extrato de doações*, em Opções |
+| `pkg_carteira.fn_ranking_doador` | function | posição exibida junto ao extrato |
+| `pkg_carteira.sp_registrar_doacao` | procedure | botão *Doar Crédito* |
+| `pkg_cashback.sp_processar_cashback` | procedure | botão *Apurar agora*, no painel |
+| `pkg_monitoramento.sp_gerar_alertas` | procedure | botão *Verificar agora*, no painel |
+| `pkg_relatorios.fn_buscar_transacoes` | function (Dynamic SQL) | `GET /api/relatorios/transacoes` |
+| `pkg_relatorios.fn_resumo_transacoes` | function (Dynamic SQL) | `GET /api/relatorios/resumo` |
+| `pkg_util.fn_moeda_br` | function | formatação usada pelos demais |
+| `trg_auditoria_saldo` | trigger | toda alteração de saldo |
+| `trg_transacao_status` | trigger | toda mudança de status de compra |
+| `trg_alerta_transacao_erro` | trigger | compra marcada como ERRO |
 
 ---
 
-## 7. Testar as rotinas direto no banco
+## 7. Testar os packages direto no banco
 
-As funções e procedures funcionam fora da aplicação, em qualquer cliente SQL:
+Os packages funcionam fora da aplicação, em qualquer cliente SQL (SQL Developer,
+SQLcl ou o `sqlplus` do próprio container):
 
 ```bash
-PGPASSWORD=solidari psql -h localhost -U solidari -d solidari
+docker exec -it solidari-oracle sqlplus solidari/solidari@//localhost/FREEPDB1
 ```
 
 ```sql
--- Indicador de impacto
-SELECT * FROM fn_impacto_usuario(2);
-
--- Extrato formatado
-SELECT fn_extrato_formatado(2, 5);
+SET SERVEROUTPUT ON
 
 -- Formatação monetária brasileira
-SELECT fn_moeda_br(1234567.89);
+SELECT pkg_util.fn_moeda_br(1234567.89) FROM dual;
 
--- Função usada dentro de uma consulta comum: os dez maiores doadores
-SELECT u.nome, fn_ranking_doador(u.id) AS posicao
-FROM usuarios u
-WHERE fn_ranking_doador(u.id) BETWEEN 1 AND 10
-ORDER BY posicao;
+-- Extrato formatado
+SELECT pkg_carteira.fn_extrato_formatado(2, 5) FROM dual;
 
--- Procedures (os NULL são os parâmetros de saída)
-CALL sp_processar_cashback(500, NULL, NULL, NULL);
-CALL sp_gerar_alertas(NULL);
-CALL sp_registrar_doacao(2, 1, 25.00, 'RESTAURACAO_AMBIENTAL', NULL);
+-- Function usada dentro de uma consulta comum: os dez maiores doadores
+SELECT u.nome, pkg_carteira.fn_ranking_doador(u.id) AS posicao
+  FROM usuarios u
+ WHERE pkg_carteira.fn_ranking_doador(u.id) BETWEEN 1 AND 10
+ ORDER BY posicao;
 
--- Regra de negócio recusando a operação
-CALL sp_registrar_doacao(2, 1, 999999.00, 'RESTAURACAO_AMBIENTAL', NULL);
+-- Procedures com parâmetros de saída
+DECLARE
+    v_arvores NUMBER; v_refeicoes NUMBER; v_total NUMBER;
+    v_proc PLS_INTEGER; v_erro PLS_INTEGER; v_credito NUMBER;
+BEGIN
+    pkg_carteira.sp_impacto_usuario(2, v_arvores, v_refeicoes, v_total);
+    DBMS_OUTPUT.PUT_LINE(v_arvores || ' árvores, ' || v_refeicoes || ' refeições');
+
+    pkg_cashback.sp_processar_cashback(500, v_proc, v_erro, v_credito);
+END;
+/
+
+-- Trilha de auditoria gerada pela trigger
+SELECT usuario_id, operacao, diferenca, saldo_novo, modulo, registrado_em
+  FROM auditoria_saldo ORDER BY id DESC FETCH FIRST 10 ROWS ONLY;
+
+-- Dynamic SQL: veja o comando que o package monta para um filtro
+SELECT pkg_relatorios.fn_sql_busca(p_status => 'ERRO', p_valor_minimo => 100) FROM dual;
+
+-- Regra de negócio recusando a operação (ORA-20001)
+DECLARE v_id NUMBER;
+BEGIN
+    pkg_carteira.sp_registrar_doacao(2, 1, 999999, 'RESTAURACAO_AMBIENTAL', v_id);
+END;
+/
+ROLLBACK;
 ```
 
-Para ver o código-fonte de qualquer rotina:
+Para ver o código-fonte de qualquer objeto:
 
 ```sql
-\df+ fn_impacto_usuario
-SELECT prosrc FROM pg_proc WHERE proname = 'sp_processar_cashback';
+SELECT text FROM user_source WHERE name = 'PKG_CASHBACK' AND type = 'PACKAGE BODY' ORDER BY line;
 ```
 
 ---
@@ -361,37 +385,67 @@ TOKEN=$(curl -s -X POST localhost:8080/api/auth/login \
 ```bash
 # Indicador calculado no banco
 curl -s localhost:8080/api/doacoes/impacto -H "Authorization: Bearer $TOKEN"
-# {"arvoresPlantadas":4,"refeicoesServidas":13,"totalDoado":116.60}
 
-# Extrato formatado pelo PostgreSQL
+# Extrato formatado pelo Oracle
 curl -s "localhost:8080/api/doacoes/extrato?limite=3" -H "Authorization: Bearer $TOKEN"
 
-# Doação (aciona sp_registrar_doacao)
+# Doação (aciona pkg_carteira.sp_registrar_doacao)
 curl -s -X POST localhost:8080/api/doacoes \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"valor":30.00,"categoriaImpacto":"RESTAURACAO_AMBIENTAL","parceiroId":1}'
 
-# Regra de negócio: 422 com a mensagem do RAISE
+# Regra de negócio: 422 com a mensagem do RAISE_APPLICATION_ERROR
 curl -s -X POST localhost:8080/api/doacoes \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"valor":99999,"categoriaImpacto":"RESTAURACAO_AMBIENTAL","parceiroId":1}'
+```
+
+Relatórios com Dynamic SQL (exigem login de administrador):
+
+```bash
+ADMIN=$(curl -s -X POST localhost:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@solidari.com","senha":"admin123"}' \
+  | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+
+# Só os filtros informados entram no SQL montado pelo package
+curl -s "localhost:8080/api/relatorios/transacoes?status=PROCESSADA&valorMinimo=200&ordenarPor=VALOR&limite=5" \
+  -H "Authorization: Bearer $ADMIN"
+
+# Agrupamento escolhido em tempo de execução: PARCEIRO, CATEGORIA, STATUS ou MES
+curl -s "localhost:8080/api/relatorios/resumo?dimensao=CATEGORIA" -H "Authorization: Bearer $ADMIN"
+
+# Ordenação fora da lista fechada: 422, nada é concatenado no SQL
+curl -s "localhost:8080/api/relatorios/transacoes?ordenarPor=senha" -H "Authorization: Bearer $ADMIN"
 ```
 
 ---
 
 ## 9. Testes automatizados
 
+Com o Oracle no ar (seção 2.2):
+
 ```bash
 ./gradlew :backend:test
 ```
 
-São doze testes. Oito exercitam as rotinas PL/pgSQL pela mesma camada JDBC que a
-API usa: débito de saldo, recusa por saldo insuficiente, conversão em impacto,
-processamento de cashback e formatação de valores.
+`RotinasPlsqlTest` exercita os packages, as triggers e o Dynamic SQL pela mesma
+camada JDBC que a API usa: débito de saldo, recusa por saldo insuficiente,
+conversão em impacto, processamento de cashback (inclusive item com erro),
+auditoria, alerta automático, filtros dinâmicos e recusa de ordenação inválida.
 
-Os testes rodam contra o mesmo banco de desenvolvimento e usam `@Transactional`,
-então tudo o que gravam é desfeito ao final — os dados de exemplo permanecem
-intactos.
+Os testes usam `@Transactional`, então tudo o que gravam é desfeito ao final — os
+dados de exemplo permanecem intactos.
+
+No GitHub, o pipeline `.github/workflows/ci-cd.yml` roda esses mesmos testes a cada
+push, contra um Oracle criado só para a execução. Para ver o resultado: aba
+**Actions** do repositório → clique na execução → role até o resumo.
+
+O **ensaio de deploy** (API em container ligada ao Oracle + smoke tests) roda no
+merge para a `master` ou manualmente em **Actions → CI/CD Solidari → Run workflow**.
+O ambiente é temporário e apagado ao fim. Publicar a imagem da API no GitHub
+Container Registry só acontece se você marcar **publicar_imagem** nesse disparo
+manual — detalhes e motivos em `docs/FASE7_ORACLE_PLSQL_CICD.md`, seção 5.3.
 
 ---
 
@@ -400,9 +454,8 @@ intactos.
 A qualquer momento, apague o schema e suba a API de novo. O Flyway refaz tudo:
 
 ```bash
-PGPASSWORD=solidari psql -h localhost -U solidari -d solidari \
-  -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-
+docker compose down -v        # apaga o container e o volume do banco
+docker compose up -d oracle
 ./gradlew :backend:bootRun
 ```
 
@@ -416,13 +469,17 @@ exatamente os mesmos usuários, compras e doações.
 **O Gradle falha logo no início, ou acusa versão de classe não suportada**
 Está rodando sobre um JDK 24/25. Exporte o `JAVA_HOME` conforme a seção 2.1.
 
-**`Connection to localhost:5432 refused`**
-O PostgreSQL não está no ar (`brew services start postgresql@17`) ou está em outra
-porta. Descubra com `lsof -nP -iTCP -sTCP:LISTEN | grep postgres` e informe via
-`SOLIDARI_DB_PORT`.
+**`IO Error: The Network Adapter could not establish the connection`**
+O Oracle não está no ar ou ainda está iniciando. Confira com `docker compose ps`
+(precisa estar `healthy`) e, se usar outra porta, informe via `SOLIDARI_DB_PORT`.
 
-**`password authentication failed for user "solidari"`**
-O usuário do banco não foi criado. Refaça os comandos da seção 2.2.
+**`ORA-01017: invalid username/password`**
+Usuário ou senha do banco errados. No Docker são `solidari` / `solidari`; no Oracle
+da FIAP, o seu RM e a sua senha (seção 2.2).
+
+**`ORA-12514: listener does not currently know of service`**
+O nome do serviço está errado. No Docker é `FREEPDB1`; no Oracle da FIAP, use o
+serviço indicado no material da disciplina. Informe via `SOLIDARI_DB_SERVICE`.
 
 **No aplicativo: "Sem conexão com o servidor"**
 A API não está no ar, ou o endereço está errado. No emulador o endereço tem que ser

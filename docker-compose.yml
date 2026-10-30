@@ -1,0 +1,45 @@
+# Ambiente local do Solidari.
+#
+#   docker compose up -d oracle          -> sobe so o banco (para rodar a API pelo Gradle)
+#   docker compose --profile api up -d   -> banco + API em container (requer o jar:
+#                                           ./gradlew :backend:bootJar)
+#
+# O usuario de aplicacao (solidari/solidari) e criado automaticamente pela imagem.
+# Na primeira subida a API roda as migracoes Flyway: tabelas, carga simulada,
+# packages PL/SQL e triggers.
+services:
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    container_name: solidari-oracle
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PASSWORD: SolidariAdmin2026
+      APP_USER: solidari
+      APP_USER_PASSWORD: solidari
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - solidari-oracle-data:/opt/oracle/oradata
+
+  api:
+    profiles: ["api"]
+    build: ./backend
+    container_name: solidari-api
+    depends_on:
+      oracle:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SOLIDARI_DB_HOST: oracle
+      SOLIDARI_DB_PORT: "1521"
+      SOLIDARI_DB_SERVICE: FREEPDB1
+      SOLIDARI_DB_USER: solidari
+      SOLIDARI_DB_PASSWORD: solidari
+
+volumes:
+  solidari-oracle-data:

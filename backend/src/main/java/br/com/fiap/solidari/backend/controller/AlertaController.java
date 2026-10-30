@@ -31,7 +31,7 @@ public class AlertaController {
     }
 
     @PostMapping("/gerar")
-    @Operation(summary = "Executa a procedure sp_gerar_alertas e devolve quantos foram criados (ADMIN)")
+    @Operation(summary = "Executa pkg_monitoramento.sp_gerar_alertas e devolve quantos foram criados (ADMIN)")
     public Map<String, Integer> gerar() {
         return Map.of("gerados", alertaService.gerar());
     }

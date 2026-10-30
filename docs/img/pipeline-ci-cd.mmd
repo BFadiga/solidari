@@ -1,0 +1,9 @@
+flowchart LR
+  G["push / PR<br/>no GitHub"] --> B1
+  G --> B2
+  G --> B3
+  B1["backend<br/>build + testes<br/>contra Oracle"] --> DP
+  B2["admin-web<br/>testes + build"] --> DP
+  B3["android<br/>testes + APK"]
+  DP["deploy (master ou manual)<br/>API em container + Oracle<br/>smoke tests<br/>ambiente temporário"] -.->|"opcional:<br/>publicar_imagem"| R["imagem no<br/>GHCR"]
+  R -.->|"opcional<br/>(secrets)"| S["servidor<br/>via SSH"]

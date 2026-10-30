@@ -1,3 +1,4 @@
+import { provideHttpClient } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { AppComponent } from './app.component';
@@ -7,19 +8,30 @@ describe('AppComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
-      providers: [provideRouter(routes)]
+      providers: [provideRouter(routes), provideHttpClient()]
     }).compileComponents();
   });
 
-  it('should create the app', () => {
+  it('deve criar o app', () => {
     const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.componentInstance;
-    expect(app).toBeTruthy();
+    expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it(`should have the 'Solidari Admin' title`, () => {
+  it('deve exibir a marca e o menu de navegação', () => {
     const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.componentInstance;
-    expect(app.title).toEqual('Solidari Admin');
+    fixture.detectChanges();
+    const tela: HTMLElement = fixture.nativeElement;
+
+    expect(tela.querySelector('.marca')?.textContent).toContain('Solidari');
+    const links = Array.from(tela.querySelectorAll('nav a')).map(a => a.textContent?.trim());
+    expect(links).toEqual(['Início', 'Carteira', 'Parceiros']);
+  });
+
+  it('deve mostrar o botão Entrar quando ninguém está logado', () => {
+    localStorage.clear();
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.btn-entrar')).toBeTruthy();
   });
 });

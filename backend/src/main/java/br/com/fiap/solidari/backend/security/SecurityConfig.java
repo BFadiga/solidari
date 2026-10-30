@@ -67,6 +67,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/parceiros/**").hasRole("ADMIN")
                         .requestMatchers("/api/transacoes/processar-cashback").hasRole("ADMIN")
                         .requestMatchers("/api/alertas/**").hasRole("ADMIN")
+                        .requestMatchers("/api/relatorios/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .headers(headers -> headers.frameOptions(frame -> frame.disable()))

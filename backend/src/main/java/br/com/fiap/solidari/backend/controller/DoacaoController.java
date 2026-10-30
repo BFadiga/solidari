@@ -56,7 +56,7 @@ public class DoacaoController {
     }
 
     @GetMapping("/extrato")
-    @Operation(summary = "Extrato de doações já formatado pela function fn_extrato_formatado")
+    @Operation(summary = "Extrato de doações já formatado pela function pkg_carteira.fn_extrato_formatado")
     public ExtratoResponse extrato(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(defaultValue = "10") int limite
